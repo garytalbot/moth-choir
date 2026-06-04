@@ -35,13 +35,14 @@
         <button class="button primary" data-action="lamp">Drop lamp</button>
         <button class="button" data-action="scatter">Scatter</button>
         <button class="button" data-action="dim">Dim stage</button>
+        <button class="button" data-action="moon">Shift moon</button>
         <button class="button" data-action="copy">Copy scene link</button>
         <button class="button" data-action="reset">New night</button>
       </div>
       <div class="legend" aria-label="Controls and hints">
         <span>Click anywhere to place a lamp.</span>
         <span>Move the mouse to become the brightest thing in the room.</span>
-        <span>Keys: <kbd>D</kbd> dim, <kbd>S</kbd> scatter, <kbd>L</kbd> lamp, <kbd>R</kbd> reset.</span>
+        <span>Keys: <kbd>D</kbd> dim, <kbd>S</kbd> scatter, <kbd>L</kbd> lamp, <kbd>M</kbd> moon, <kbd>R</kbd> reset.</span>
       </div>
     </header>
 
@@ -58,6 +59,10 @@
         <div class="stat">
           <strong id="mood-label">hush</strong>
           <span>room mood</span>
+        </div>
+        <div class="stat">
+          <strong id="moon-phase">new</strong>
+          <span>moon phase</span>
         </div>
         <div class="stat">
           <strong id="scene-seed">night-0</strong>

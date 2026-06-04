@@ -3,6 +3,7 @@ const ctx = canvas.getContext('2d', { alpha: true });
 const lampCountEl = document.getElementById('lamp-count');
 const mothCountEl = document.getElementById('moth-count');
 const moodLabelEl = document.getElementById('mood-label');
+const moonPhaseEl = document.getElementById('moon-phase');
 const sceneSeedEl = document.getElementById('scene-seed');
 const verseEl = document.getElementById('verse');
 const miniNoteEl = document.getElementById('mini-note');
@@ -13,6 +14,16 @@ const BASE_LAMPS = 2;
 const MAX_LAMPS = 9;
 const STAR_COUNT = 220;
 const DIM_SCALE = 0.58;
+const MOON_PHASES = [
+  'new',
+  'waxing crescent',
+  'first quarter',
+  'waxing gibbous',
+  'full',
+  'waning gibbous',
+  'last quarter',
+  'waning crescent',
+];
 
 const state = {
   width: 0,
@@ -21,6 +32,7 @@ const state = {
   seed: '',
   rng: null,
   dim: false,
+  moon: 0,
   lamps: [],
   moths: [],
   stars: [],
@@ -102,7 +114,8 @@ function readConfig() {
   const lamps = clamp(Number.parseInt(params.get('lamps') || '', 10) || BASE_LAMPS, 1, MAX_LAMPS);
   const moths = clamp(Number.parseInt(params.get('moths') || '', 10) || BASE_MOTHS, 18, 84);
   const dim = params.get('dim') === '1';
-  return { seed, lamps, moths, dim };
+  const moon = clamp(Number.parseInt(params.get('moon') || '', 10) || 0, 0, MOON_PHASES.length - 1);
+  return { seed, lamps, moths, dim, moon };
 }
 
 function syncUrl() {
@@ -111,6 +124,7 @@ function syncUrl() {
   url.searchParams.set('lamps', String(Math.min(state.lamps.filter((lamp) => !lamp.cursor).length, MAX_LAMPS)));
   url.searchParams.set('moths', String(state.moths.length));
   url.searchParams.set('dim', state.dim ? '1' : '0');
+  url.searchParams.set('moon', String(state.moon));
   history.replaceState(null, '', url);
 }
 
@@ -177,6 +191,7 @@ function resetScene(advanceSeed = true) {
   }
   state.rng = makeRng(state.seed);
   state.dim = readConfig().dim;
+  state.moon = readConfig().moon;
   state.lamps = [];
   state.moths = [];
   const config = readConfig();
@@ -259,6 +274,7 @@ function updateLabels() {
   lampCountEl.textContent = String(state.lamps.filter((lamp) => !lamp.cursor).length);
   mothCountEl.textContent = String(state.moths.length);
   moodLabelEl.textContent = state.dim ? 'hushed' : 'glimmer';
+  moonPhaseEl.textContent = MOON_PHASES[state.moon];
   sceneSeedEl.textContent = state.seed;
 }
 
@@ -285,6 +301,10 @@ function updateMoths(dt) {
   const cursorLamp = makeCursorLamp();
   if (cursorLamp) {
     lamps.push(cursorLamp);
+  }
+  const moonLamp = getMoonLamp();
+  if (moonLamp.power > 0) {
+    lamps.push(moonLamp);
   }
 
   for (const moth of state.moths) {
@@ -380,6 +400,8 @@ function drawSky(time) {
   ctx.fillStyle = mist;
   ctx.fillRect(0, 0, state.width, state.height);
 
+  drawMoon(time);
+
   for (const star of state.stars) {
     const twinkle = 0.35 + Math.sin(time * 0.0007 + star.wobble) * 0.25;
     ctx.fillStyle = `rgba(247, 236, 210, ${star.a * twinkle})`;
@@ -387,6 +409,48 @@ function drawSky(time) {
     ctx.arc(star.x, star.y + Math.sin(time * 0.0004 + star.wobble) * 0.5, star.r, 0, Math.PI * 2);
     ctx.fill();
   }
+}
+
+function getMoonLamp() {
+  const phase = state.moon;
+  const power = 0.18 + (phase === 0 ? 0 : phase === 4 ? 1 : 0.14 + Math.sin((phase / 7) * Math.PI) * 0.42);
+  return {
+    x: state.width * 0.81,
+    y: state.height * 0.17,
+    power,
+    warmth: phase === 4 ? 0.78 : 0.52,
+  };
+}
+
+function drawMoon(time) {
+  const moon = getMoonLamp();
+  const phase = state.moon / (MOON_PHASES.length - 1);
+  const glowRadius = 108 + moon.power * 36;
+  const glow = ctx.createRadialGradient(moon.x, moon.y, 0, moon.x, moon.y, glowRadius);
+  glow.addColorStop(0, `rgba(239, 233, 255, ${0.12 + moon.power * 0.26})`);
+  glow.addColorStop(0.28, `rgba(202, 191, 255, ${0.1 + moon.power * 0.16})`);
+  glow.addColorStop(0.75, 'rgba(180, 170, 230, 0.04)');
+  glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(moon.x, moon.y, glowRadius, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.save();
+  ctx.translate(moon.x, moon.y);
+  ctx.rotate(Math.sin(time * 0.0003) * 0.06);
+  ctx.shadowBlur = 24;
+  ctx.shadowColor = 'rgba(224, 214, 255, 0.55)';
+  ctx.fillStyle = 'rgba(230, 225, 255, 0.94)';
+  ctx.beginPath();
+  ctx.arc(0, 0, 20, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = 'rgba(4, 5, 10, 0.72)';
+  ctx.beginPath();
+  ctx.arc((phase - 0.5) * 20, 0, 19, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
 }
 
 function drawLamp(lamp, time, isCursor = false) {
@@ -554,6 +618,7 @@ async function copySceneLink() {
   url.searchParams.set('lamps', String(Math.min(state.lamps.filter((lamp) => !lamp.cursor).length, MAX_LAMPS)));
   url.searchParams.set('moths', String(state.moths.length));
   url.searchParams.set('dim', state.dim ? '1' : '0');
+  url.searchParams.set('moon', String(state.moon));
   try {
     await navigator.clipboard.writeText(url.toString());
     miniNoteEl.textContent = 'Scene link copied. The exact number of moths and lamps now has a paper trail.';
@@ -571,6 +636,8 @@ function onKeyDown(event) {
     toggleDim();
   } else if (key === 's') {
     scatterMoths();
+  } else if (key === 'm') {
+    shiftMoon();
   } else if (key === 'l') {
     const x = state.pointer.active ? state.pointer.x : state.width * (0.35 + state.rng() * 0.3);
     const y = state.pointer.active ? state.pointer.y : state.height * (0.35 + state.rng() * 0.25);
@@ -578,6 +645,14 @@ function onKeyDown(event) {
   } else if (key === 'r') {
     resetScene(true);
   }
+}
+
+function shiftMoon() {
+  state.moon = (state.moon + 1) % MOON_PHASES.length;
+  miniNoteEl.textContent = `The moon slides to ${MOON_PHASES[state.moon]}. The moths update their tiny theology.`;
+  updateLabels();
+  refreshVerse(true);
+  syncUrl();
 }
 
 function wireButtons() {
@@ -596,6 +671,8 @@ function wireButtons() {
         copySceneLink();
       } else if (action === 'reset') {
         resetScene(true);
+      } else if (action === 'moon') {
+        shiftMoon();
       }
     });
   }
@@ -606,6 +683,7 @@ function init() {
   state.seed = config.seed;
   state.rng = makeRng(state.seed);
   state.dim = config.dim;
+  state.moon = config.moon;
   state.moths = Array.from({ length: config.moths }, (_, index) => makeMoth(index));
   state.lamps = [];
   resize();

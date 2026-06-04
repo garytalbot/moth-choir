@@ -216,6 +216,10 @@ kbd {
   line-height: 1.05;
 }
 
+.stat:nth-child(4) strong {
+  color: #e9ddff;
+}
+
 .stat span {
   display: block;
   margin-top: 0.3rem;

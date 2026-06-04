@@ -28,6 +28,7 @@ const MOON_PHASES = [
   'waning crescent',
 ];
 const ROOM_PHASES = ['hush', 'murmur', 'chorus', 'swarm'];
+const POSTCARD_SIZE = { width: 1400, height: 900 };
 
 const audio = {
   supported: Boolean(window.AudioContext || window.webkitAudioContext),
@@ -94,6 +95,54 @@ const nouns = [
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+function escapeXml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&apos;');
+}
+
+function wrapLines(text, maxChars, maxLines) {
+  const words = String(text).trim().split(/\s+/).filter(Boolean);
+  if (!words.length) {
+    return [];
+  }
+
+  const lines = [];
+  let current = '';
+
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (candidate.length > maxChars && current) {
+      lines.push(current);
+      current = word;
+      if (lines.length === maxLines) {
+        break;
+      }
+    } else {
+      current = candidate;
+    }
+  }
+
+  if (current && lines.length < maxLines) {
+    lines.push(current);
+  }
+
+  if (lines.length > maxLines) {
+    lines.length = maxLines;
+  }
+
+  const original = words.join(' ');
+  const joined = lines.join(' ');
+  if (lines.length && joined.length < original.length) {
+    lines[lines.length - 1] = `${lines[lines.length - 1].replace(/\s+$/, '')}…`;
+  }
+
+  return lines;
 }
 
 function hashSeed(input) {
@@ -672,7 +721,7 @@ function drawMoon(time) {
 }
 
 function drawLamp(lamp, time, isCursor = false) {
-  const glowRadius = isCursor ? 150 : 176 * lamp.power + state.pulse * 28;
+  const glowRadius = isCursor ? 138 : 166 * lamp.power + state.pulse * 24;
   const coreRadius = isCursor ? 5 : 6 + lamp.power * 3 + state.resonance * 0.6;
   const pulse = 1 + Math.sin(time * 0.002 + lamp.x * 0.01 + state.clockOffset) * (0.03 + state.pulse * 0.03);
   const glow = ctx.createRadialGradient(lamp.x, lamp.y, 0, lamp.x, lamp.y, glowRadius);
@@ -929,6 +978,148 @@ async function copySceneLink() {
   }
 }
 
+function getSceneCounts() {
+  return {
+    lamps: state.lamps.filter((lamp) => !lamp.cursor).length,
+    moths: state.moths.length,
+  };
+}
+
+function sceneArtifactName() {
+  const safeSeed = state.seed.replace(/[^a-z0-9_-]+/gi, '-').toLowerCase();
+  return `moth-choir-${safeSeed || 'night'}.svg`;
+}
+
+function buildSceneArtifact() {
+  const { width, height } = POSTCARD_SIZE;
+  const currentWidth = Math.max(state.width, 1);
+  const currentHeight = Math.max(state.height, 1);
+  const scaleX = width / currentWidth;
+  const scaleY = height / currentHeight;
+  const scale = Math.min(scaleX, scaleY);
+  const lampScale = Math.max(0.75, scale * 1.05);
+  const mothScale = Math.max(0.62, scale * 0.9);
+  const { lamps, moths } = getSceneCounts();
+  const verseLines = wrapLines(state.verse || 'The room is waking in brass and shadow.', 38, 5);
+  const detailLines = [
+    `seed ${state.seed}`,
+    `${lamps} lamp${lamps === 1 ? '' : 's'} lit`,
+    `${moths} moth${moths === 1 ? '' : 's'} in the air`,
+    `${MOON_PHASES[state.moon]} moon`,
+    `${state.roomPhase} room`,
+  ];
+  const safeWidth = width - 72;
+  const moonX = 1018;
+  const moonY = 148;
+  const moonPower = getMoonLamp().power;
+  const moonRadius = 92 + moonPower * 22;
+  const title = 'Moth Choir';
+  const subtitle = 'preserved scene artifact';
+
+  const lampMarks = state.lamps
+    .filter((lamp) => !lamp.cursor)
+    .map((lamp) => {
+      const x = 70 + lamp.x * scaleX;
+      const y = 70 + lamp.y * scaleY;
+      const glow = 42 + lamp.power * 56 * lampScale;
+      const core = 4.5 + lamp.power * 2.2 * lampScale;
+      const warmth = lamp.warmth || 0.8;
+      return `
+        <g transform="translate(${x.toFixed(2)} ${y.toFixed(2)})">
+          <circle r="${glow.toFixed(2)}" fill="#ffc16b" fill-opacity="${Math.min(0.14 + warmth * 0.08, 0.22).toFixed(3)}"></circle>
+          <circle r="${(glow * 0.56).toFixed(2)}" fill="#ff9454" fill-opacity="${Math.min(0.12 + warmth * 0.09, 0.2).toFixed(3)}"></circle>
+          <ellipse rx="${(core * 1.7).toFixed(2)}" ry="${(core * 1.15).toFixed(2)}" fill="#ffe2ac" fill-opacity="0.96"></ellipse>
+          <circle r="${core.toFixed(2)}" fill="#fff8ea" fill-opacity="0.95"></circle>
+        </g>`;
+    })
+    .join('');
+
+  const mothMarks = moths > 0
+    ? state.moths.map((moth) => {
+      const x = 70 + moth.x * scaleX;
+      const y = 70 + moth.y * scaleY;
+      const angle = Math.atan2(moth.vy, moth.vx) * 180 / Math.PI + 90;
+      const tone = moth.tone > 0.5 ? '218,193,255' : '255,225,188';
+      const alpha = clamp(0.25 + moth.glow * 0.35, 0.2, 0.75);
+      const wing = (4.5 + moth.glow * 4.2) * mothScale;
+      const body = (1.8 + moth.glow * 0.8) * mothScale;
+      return `
+        <g transform="translate(${x.toFixed(2)} ${y.toFixed(2)}) rotate(${angle.toFixed(2)})">
+          <ellipse cx="-${(wing * 0.52).toFixed(2)}" cy="0" rx="${wing.toFixed(2)}" ry="${(wing * 1.4).toFixed(2)}" fill="rgb(${tone})" fill-opacity="${alpha.toFixed(3)}"></ellipse>
+          <ellipse cx="${(wing * 0.52).toFixed(2)}" cy="0" rx="${wing.toFixed(2)}" ry="${(wing * 1.4).toFixed(2)}" fill="rgb(${tone})" fill-opacity="${alpha.toFixed(3)}"></ellipse>
+          <rect x="${(-body * 0.45).toFixed(2)}" y="${(-body * 4.4).toFixed(2)}" width="${(body * 0.9).toFixed(2)}" height="${(body * 8.8).toFixed(2)}" rx="${(body * 0.45).toFixed(2)}" fill="#130f0d" fill-opacity="${clamp(0.72 + moth.glow * 0.15, 0.68, 0.95).toFixed(3)}"></rect>
+        </g>`;
+    }).join('')
+    : '';
+
+  const verseBlock = verseLines
+    .map((line, index) => `<tspan x="72" dy="${index === 0 ? 0 : 42}">${escapeXml(line)}</tspan>`)
+    .join('');
+
+  const detailBlock = detailLines
+    .map((line, index) => `<tspan x="${safeWidth}" dy="${index === 0 ? 0 : 28}">${escapeXml(line)}</tspan>`)
+    .join('');
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="Moth Choir preserved scene artifact">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#090a13"/>
+      <stop offset="55%" stop-color="#05060c"/>
+      <stop offset="100%" stop-color="#020204"/>
+    </linearGradient>
+    <radialGradient id="moonGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#f8f4ff" stop-opacity="0.95"/>
+      <stop offset="35%" stop-color="#d4c6ff" stop-opacity="0.6"/>
+      <stop offset="68%" stop-color="#a899ff" stop-opacity="0.24"/>
+      <stop offset="100%" stop-color="#a899ff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="cardGlow" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffd7aa" stop-opacity="0.1"/>
+      <stop offset="48%" stop-color="#a191ff" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="1400" height="900" fill="url(#bg)"/>
+  <rect x="36" y="36" width="1328" height="828" rx="40" fill="none" stroke="#ffffff" stroke-opacity="0.1" stroke-width="1.25"/>
+  <rect x="48" y="48" width="1304" height="804" rx="34" fill="url(#cardGlow)" opacity="0.76"/>
+  <ellipse cx="${moonX}" cy="${moonY}" rx="${(moonRadius * 1.6).toFixed(2)}" ry="${(moonRadius * 1.2).toFixed(2)}" fill="url(#moonGlow)" opacity="0.8"/>
+  <circle cx="${moonX}" cy="${moonY}" r="${moonRadius.toFixed(2)}" fill="#ece6ff" fill-opacity="0.95"/>
+  <circle cx="${(moonX + 18).toFixed(2)}" cy="${moonY}" r="${(moonRadius * 0.96).toFixed(2)}" fill="#080910" fill-opacity="0.88"/>
+  <g opacity="0.5">
+    <ellipse cx="300" cy="170" rx="210" ry="110" fill="#ffd58b" fill-opacity="0.06"/>
+    <ellipse cx="1020" cy="670" rx="320" ry="140" fill="#a899ff" fill-opacity="0.05"/>
+  </g>
+  <g opacity="0.7">${lampMarks}</g>
+  <g opacity="0.92">${mothMarks}</g>
+  <rect x="48" y="646" width="1304" height="202" rx="28" fill="#08090e" fill-opacity="0.82" stroke="#ffffff" stroke-opacity="0.1"/>
+  <text x="72" y="722" fill="#f7f1e4" font-family="Iowan Old Style, Palatino Linotype, Book Antiqua, Georgia, serif" font-size="54" letter-spacing="-0.05em">${escapeXml(title)}</text>
+  <text x="72" y="768" fill="#e7bf67" fill-opacity="0.95" font-family="Iowan Old Style, Palatino Linotype, Book Antiqua, Georgia, serif" font-size="18" letter-spacing="0.25em">${escapeXml(subtitle)}</text>
+  <text x="72" y="832" fill="#f7f1e4" fill-opacity="0.88" font-family="Iowan Old Style, Palatino Linotype, Book Antiqua, Georgia, serif" font-size="29" text-anchor="start">
+    ${verseBlock}
+  </text>
+  <text x="${safeWidth}" y="714" fill="#f7f1e4" fill-opacity="0.7" font-family="Arial, Helvetica, sans-serif" font-size="18" text-anchor="end" letter-spacing="0.14em">
+    ${detailBlock}
+  </text>
+  <text x="${safeWidth}" y="822" fill="#e7bf67" fill-opacity="0.92" font-family="Arial, Helvetica, sans-serif" font-size="16" text-anchor="end" letter-spacing="0.3em">MOTH CHOIR / PUBLIC ARTIFACT</text>
+</svg>`;
+}
+
+async function savePostcard() {
+  const svg = buildSceneArtifact();
+  const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = sceneArtifactName();
+  anchor.rel = 'noopener';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  miniNoteEl.textContent = 'The night has been preserved as a postcard. The file keeps the seed, the lamps, the moths, and the verse.';
+}
+
 function onKeyDown(event) {
   if (event.repeat) {
     return;
@@ -942,6 +1133,8 @@ function onKeyDown(event) {
     shiftMoon();
   } else if (key === 'h') {
     toggleHum();
+  } else if (key === 'p') {
+    savePostcard();
   } else if (key === 'l') {
     const x = state.pointer.active ? state.pointer.x : state.width * (0.35 + state.rng() * 0.3);
     const y = state.pointer.active ? state.pointer.y : state.height * (0.35 + state.rng() * 0.25);
@@ -973,6 +1166,8 @@ function wireButtons() {
         toggleDim();
       } else if (action === 'copy') {
         copySceneLink();
+      } else if (action === 'postcard') {
+        savePostcard();
       } else if (action === 'reset') {
         resetScene(true);
       } else if (action === 'moon') {

@@ -4,6 +4,7 @@ const lampCountEl = document.getElementById('lamp-count');
 const mothCountEl = document.getElementById('moth-count');
 const moodLabelEl = document.getElementById('mood-label');
 const moonPhaseEl = document.getElementById('moon-phase');
+const pulseValueEl = document.getElementById('pulse-value');
 const sceneSeedEl = document.getElementById('scene-seed');
 const verseEl = document.getElementById('verse');
 const miniNoteEl = document.getElementById('mini-note');
@@ -24,6 +25,7 @@ const MOON_PHASES = [
   'last quarter',
   'waning crescent',
 ];
+const ROOM_PHASES = ['hush', 'murmur', 'chorus', 'swarm'];
 
 const state = {
   width: 0,
@@ -33,6 +35,10 @@ const state = {
   rng: null,
   dim: false,
   moon: 0,
+  pulse: 0,
+  resonance: 0,
+  roomPhase: 'hush',
+  clockOffset: 0,
   lamps: [],
   moths: [],
   stars: [],
@@ -185,11 +191,32 @@ function makeMoth(index) {
   };
 }
 
+function updateSceneTone(time) {
+  const lampPower = state.lamps
+    .filter((lamp) => !lamp.cursor)
+    .reduce((sum, lamp) => sum + lamp.power, 0);
+  const moonLift = state.moon === 4 ? 0.16 : (state.moon / Math.max(MOON_PHASES.length - 1, 1)) * 0.12;
+  const breath = 0.5 + 0.5 * Math.sin(time * 0.00055 + state.clockOffset);
+  const lampTerm = clamp(lampPower / 7.5, 0, 1);
+  const mothTerm = clamp(state.moths.length / 84, 0, 1);
+
+  state.pulse = clamp(0.14 + breath * 0.42 + lampTerm * 0.28 + moonLift + (state.pointer.active ? 0.06 : 0), 0, 1);
+  state.resonance = clamp(lampTerm * 0.42 + mothTerm * 0.38 + state.pulse * 0.28, 0, 1);
+  state.roomPhase = state.resonance > 0.78 || state.moths.length > 68
+    ? ROOM_PHASES[3]
+    : state.resonance > 0.58 || lampPower > 5
+      ? ROOM_PHASES[2]
+      : state.resonance > 0.34
+        ? ROOM_PHASES[1]
+        : ROOM_PHASES[0];
+}
+
 function resetScene(advanceSeed = true) {
   if (advanceSeed || !state.seed) {
     state.seed = advanceSeed ? makeSeed() : state.seed || makeSeed();
   }
   state.rng = makeRng(state.seed);
+  state.clockOffset = (hashSeed(state.seed) / 0xffffffff) * Math.PI * 2;
   state.dim = readConfig().dim;
   state.moon = readConfig().moon;
   state.lamps = [];
@@ -214,6 +241,7 @@ function resetScene(advanceSeed = true) {
     );
   }
   state.pointer.active = false;
+  updateSceneTone(performance.now());
   updateLabels();
   refreshVerse(true);
   miniNoteEl.textContent = 'A fresh night has been cued. The moths are already arguing with the lanterns.';
@@ -273,8 +301,17 @@ function toggleDim() {
 function updateLabels() {
   lampCountEl.textContent = String(state.lamps.filter((lamp) => !lamp.cursor).length);
   mothCountEl.textContent = String(state.moths.length);
-  moodLabelEl.textContent = state.dim ? 'hushed' : 'glimmer';
+  moodLabelEl.textContent = state.dim
+    ? 'hushed'
+    : state.roomPhase === ROOM_PHASES[3]
+      ? 'radiant'
+      : state.roomPhase === ROOM_PHASES[2]
+        ? 'thrumming'
+        : state.roomPhase === ROOM_PHASES[1]
+          ? 'glimmer'
+          : 'breathing';
   moonPhaseEl.textContent = MOON_PHASES[state.moon];
+  pulseValueEl.textContent = `${Math.round(state.pulse * 100)}%`;
   sceneSeedEl.textContent = state.seed;
 }
 
@@ -292,18 +329,32 @@ function refreshVerse(force = false) {
     : state.moon === 0
       ? 'the moon is pretending not to be there'
       : `the moon is ${MOON_PHASES[state.moon]} and still listening`;
+  const pulseLine = state.pulse > 0.75
+    ? 'the room is breathing fast enough to sound like a chord'
+    : state.pulse > 0.5
+      ? 'the room is holding a warm, steady pulse'
+      : 'the room is still finding its pulse';
+  const phaseLine = state.roomPhase === ROOM_PHASES[3]
+    ? 'the swarm has gone almost ceremonial'
+    : state.roomPhase === ROOM_PHASES[2]
+      ? 'the lamp halos are starting to overlap'
+      : state.roomPhase === ROOM_PHASES[1]
+        ? 'the moths are tightening their circles'
+        : 'the night is keeping its distance';
   const opener = choose(state.rng, openers);
   const verb = choose(state.rng, verbs);
   const noun = choose(state.rng, nouns);
   const middle = lampCount > 4
     ? 'the room has become a little cathedral of light'
     : 'the lanterns are only just starting to learn each other';
-  const ending = mothCount > 55 ? 'and the ceiling is beginning to sound crowded' : 'and the wings keep the quiet from hardening';
-  state.verse = `${opener} ${verb} ${noun}; ${middle}, ${moonLine}, ${ending}.`;
+  const ending = mothCount > 55
+    ? 'and the ceiling is beginning to sound crowded'
+    : 'and the wings keep the quiet from hardening';
+  state.verse = `${opener} ${verb} ${noun}; ${middle}, ${pulseLine}, ${phaseLine}, ${moonLine}, ${ending}.`;
   verseEl.textContent = state.verse;
 }
 
-function updateMoths(dt) {
+function updateMoths(dt, now) {
   const lamps = state.lamps.map((lamp) => ({ ...lamp }));
   const cursorLamp = makeCursorLamp();
   if (cursorLamp) {
@@ -317,14 +368,21 @@ function updateMoths(dt) {
   for (const moth of state.moths) {
     let bestLamp = null;
     let bestScore = -Infinity;
+    let secondLamp = null;
+    let secondScore = -Infinity;
     for (const lamp of lamps) {
       const dx = lamp.x - moth.x;
       const dy = lamp.y - moth.y;
       const distSq = dx * dx + dy * dy + 120;
       const score = (lamp.power * 1200) / distSq;
       if (score > bestScore) {
+        secondScore = bestScore;
+        secondLamp = bestLamp;
         bestScore = score;
         bestLamp = lamp;
+      } else if (score > secondScore) {
+        secondScore = score;
+        secondLamp = lamp;
       }
     }
 
@@ -337,14 +395,17 @@ function updateMoths(dt) {
       };
     }
 
+    moth.glow = clamp(0.22 + bestLamp.power * 0.14 + state.resonance * 0.24, 0.18, 0.88);
+
     const dx = bestLamp.x - moth.x;
     const dy = bestLamp.y - moth.y;
     const dist = Math.hypot(dx, dy) || 1;
     const nx = dx / dist;
     const ny = dy / dist;
-    const swirl = state.dim ? 0.05 : 0.075;
-    const pull = clamp((bestLamp.power * 170) / (dist * dist + 120), 0.014, state.dim ? 0.18 : 0.26);
-    const orbit = (bestLamp.power * 0.14) + moth.tone * 0.08;
+    const pulseLift = 0.78 + state.pulse * 0.78;
+    const swirl = state.dim ? 0.045 : 0.075 + state.resonance * 0.02;
+    const pull = clamp((bestLamp.power * 170 * pulseLift) / (dist * dist + 120), 0.014, state.dim ? 0.18 : 0.3);
+    const orbit = (bestLamp.power * 0.14) + moth.tone * 0.08 + state.pulse * 0.05;
 
     moth.vx += nx * pull * dt * 60;
     moth.vy += ny * pull * dt * 60;
@@ -356,10 +417,34 @@ function updateMoths(dt) {
       moth.vy += nx * 0.03 * dt * 60;
     }
 
+    if (secondLamp && secondScore > bestScore * 0.6) {
+      const bridgeX = (bestLamp.x + secondLamp.x) * 0.5;
+      const bridgeY = (bestLamp.y + secondLamp.y) * 0.5;
+      const bridgeDx = bridgeX - moth.x;
+      const bridgeDy = bridgeY - moth.y;
+      const bridgeDist = Math.hypot(bridgeDx, bridgeDy) || 1;
+      const bridgePull = clamp((secondScore / (bestScore + 0.001)) * 0.018 * (0.6 + state.pulse), 0.004, 0.024);
+      moth.vx += (bridgeDx / bridgeDist) * bridgePull * dt * 60;
+      moth.vy += (bridgeDy / bridgeDist) * bridgePull * dt * 60;
+    }
+
+    const wingWander = Math.sin(now * 0.0015 + moth.phase) * 0.0024;
+    moth.vx += -ny * wingWander * dt * 60;
+    moth.vy += nx * wingWander * dt * 60;
+
+    const edgeX = Math.min(moth.x, state.width - moth.x);
+    const edgeY = Math.min(moth.y, state.height - moth.y);
+    if (edgeX < 52) {
+      moth.vx += (moth.x < state.width * 0.5 ? 1 : -1) * (0.028 + state.pulse * 0.014) * dt * 60;
+    }
+    if (edgeY < 52) {
+      moth.vy += (moth.y < state.height * 0.5 ? 1 : -1) * (0.024 + state.pulse * 0.012) * dt * 60;
+    }
+
     moth.vx *= state.dim ? 0.992 : 0.989;
     moth.vy *= state.dim ? 0.992 : 0.989;
 
-    const maxSpeed = state.dim ? 2.4 : 3.1;
+    const maxSpeed = state.dim ? 2.4 : 3.1 + state.resonance * 0.35;
     const speed = Math.hypot(moth.vx, moth.vy);
     if (speed > maxSpeed) {
       moth.vx = (moth.vx / speed) * maxSpeed;
@@ -387,8 +472,8 @@ function drawSky(time) {
   ctx.clearRect(0, 0, state.width, state.height);
 
   const sky = ctx.createLinearGradient(0, 0, 0, state.height);
-  sky.addColorStop(0, '#07080f');
-  sky.addColorStop(0.55, state.dim ? '#04050a' : '#04060c');
+  sky.addColorStop(0, state.resonance > 0.7 ? '#090812' : '#07080f');
+  sky.addColorStop(0.55, state.dim ? '#04050a' : state.resonance > 0.55 ? '#050611' : '#04060c');
   sky.addColorStop(1, '#020205');
   ctx.fillStyle = sky;
   ctx.fillRect(0, 0, state.width, state.height);
@@ -401,8 +486,8 @@ function drawSky(time) {
     state.height * 0.45,
     Math.max(state.width, state.height) * 0.85,
   );
-  mist.addColorStop(0, `rgba(133, 104, 255, ${state.dim ? 0.05 : 0.1})`);
-  mist.addColorStop(0.34, 'rgba(207, 148, 69, 0.05)');
+  mist.addColorStop(0, `rgba(133, 104, 255, ${state.dim ? 0.05 : 0.08 + state.pulse * 0.05})`);
+  mist.addColorStop(0.34, `rgba(207, 148, 69, ${0.04 + state.resonance * 0.03})`);
   mist.addColorStop(1, 'rgba(0, 0, 0, 0)');
   ctx.fillStyle = mist;
   ctx.fillRect(0, 0, state.width, state.height);
@@ -410,7 +495,7 @@ function drawSky(time) {
   drawMoon(time);
 
   for (const star of state.stars) {
-    const twinkle = 0.35 + Math.sin(time * 0.0007 + star.wobble) * 0.25;
+    const twinkle = 0.3 + Math.sin(time * 0.0007 + star.wobble + state.clockOffset) * (0.18 + state.pulse * 0.12);
     ctx.fillStyle = `rgba(247, 236, 210, ${star.a * twinkle})`;
     ctx.beginPath();
     ctx.arc(star.x, star.y + Math.sin(time * 0.0004 + star.wobble) * 0.5, star.r, 0, Math.PI * 2);
@@ -432,10 +517,10 @@ function getMoonLamp() {
 function drawMoon(time) {
   const moon = getMoonLamp();
   const phase = state.moon / (MOON_PHASES.length - 1);
-  const glowRadius = 108 + moon.power * 36;
+  const glowRadius = 104 + moon.power * 36 + state.pulse * 18;
   const glow = ctx.createRadialGradient(moon.x, moon.y, 0, moon.x, moon.y, glowRadius);
-  glow.addColorStop(0, `rgba(239, 233, 255, ${0.12 + moon.power * 0.26})`);
-  glow.addColorStop(0.28, `rgba(202, 191, 255, ${0.1 + moon.power * 0.16})`);
+  glow.addColorStop(0, `rgba(239, 233, 255, ${0.12 + moon.power * 0.26 + state.pulse * 0.03})`);
+  glow.addColorStop(0.28, `rgba(202, 191, 255, ${0.1 + moon.power * 0.16 + state.resonance * 0.02})`);
   glow.addColorStop(0.75, 'rgba(180, 170, 230, 0.04)');
   glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
   ctx.fillStyle = glow;
@@ -445,7 +530,7 @@ function drawMoon(time) {
 
   ctx.save();
   ctx.translate(moon.x, moon.y);
-  ctx.rotate(Math.sin(time * 0.0003) * 0.06);
+  ctx.rotate(Math.sin(time * 0.0003 + state.clockOffset) * (0.05 + state.pulse * 0.02));
   ctx.shadowBlur = 24;
   ctx.shadowColor = 'rgba(224, 214, 255, 0.55)';
   ctx.fillStyle = 'rgba(230, 225, 255, 0.94)';
@@ -461,14 +546,14 @@ function drawMoon(time) {
 }
 
 function drawLamp(lamp, time, isCursor = false) {
-  const glowRadius = isCursor ? 150 : 180 * lamp.power;
-  const coreRadius = isCursor ? 5 : 6 + lamp.power * 3;
-  const pulse = 1 + Math.sin(time * 0.002 + lamp.x * 0.01) * 0.04;
+  const glowRadius = isCursor ? 150 : 176 * lamp.power + state.pulse * 28;
+  const coreRadius = isCursor ? 5 : 6 + lamp.power * 3 + state.resonance * 0.6;
+  const pulse = 1 + Math.sin(time * 0.002 + lamp.x * 0.01 + state.clockOffset) * (0.03 + state.pulse * 0.03);
   const glow = ctx.createRadialGradient(lamp.x, lamp.y, 0, lamp.x, lamp.y, glowRadius);
   const amber = lamp.warmth || 0.8;
   glow.addColorStop(0, `rgba(255, 236, 186, ${0.25 * pulse})`);
-  glow.addColorStop(0.18, `rgba(255, 196, 109, ${0.24 * amber})`);
-  glow.addColorStop(0.55, `rgba(233, 146, 79, ${0.14 * amber})`);
+  glow.addColorStop(0.18, `rgba(255, 196, 109, ${0.24 * amber + state.pulse * 0.04})`);
+  glow.addColorStop(0.55, `rgba(233, 146, 79, ${0.14 * amber + state.resonance * 0.04})`);
   glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
   ctx.fillStyle = glow;
   ctx.beginPath();
@@ -487,12 +572,18 @@ function drawLamp(lamp, time, isCursor = false) {
   ctx.beginPath();
   ctx.ellipse(0, 0, coreRadius, coreRadius * 0.85, 0, 0, Math.PI * 2);
   ctx.fill();
+
+  ctx.strokeStyle = `rgba(255, 225, 177, ${0.12 + state.pulse * 0.18})`;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(0, 0, coreRadius + 11 + state.pulse * 6, 0, Math.PI * 2);
+  ctx.stroke();
   ctx.restore();
 }
 
 function drawMoth(moth, time) {
   const angle = Math.atan2(moth.vy, moth.vx);
-  const wingOpen = 0.7 + Math.sin(time * 0.014 + moth.phase) * 0.28;
+  const wingOpen = 0.68 + Math.sin(time * 0.014 + moth.phase + state.clockOffset) * (0.24 + state.pulse * 0.1);
   const bodyAlpha = state.dim ? 0.74 : 0.9;
   const wingTint = moth.tone > 0.5 ? '218, 193, 255' : '255, 225, 188';
 
@@ -515,7 +606,7 @@ function drawMoth(moth, time) {
   ctx.save();
   ctx.translate(moth.x, moth.y);
   ctx.rotate(angle + Math.PI * 0.5);
-  ctx.shadowBlur = state.dim ? 4 : 10;
+  ctx.shadowBlur = state.dim ? 4 : 10 + state.resonance * 6;
   ctx.shadowColor = `rgba(${wingTint}, ${0.25 + moth.glow * 0.18})`;
 
   ctx.fillStyle = `rgba(${wingTint}, ${0.18 * bodyAlpha})`;
@@ -557,6 +648,18 @@ function drawScene(time) {
   ctx.fillStyle = `rgba(0, 0, 0, ${ambient})`;
   ctx.fillRect(0, 0, state.width, state.height);
 
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  const pulseX = state.pointer.active ? state.pointer.x : state.width * 0.52;
+  const pulseY = state.pointer.active ? state.pointer.y : state.height * 0.44;
+  const pulseGlow = ctx.createRadialGradient(pulseX, pulseY, 0, pulseX, pulseY, Math.max(state.width, state.height) * (0.22 + state.pulse * 0.12));
+  pulseGlow.addColorStop(0, `rgba(255, 214, 167, ${0.04 + state.pulse * 0.08})`);
+  pulseGlow.addColorStop(0.45, `rgba(156, 138, 255, ${0.03 + state.resonance * 0.05})`);
+  pulseGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = pulseGlow;
+  ctx.fillRect(0, 0, state.width, state.height);
+  ctx.restore();
+
   for (const lamp of state.lamps) {
     if (lamp.cursor) {
       continue;
@@ -591,7 +694,8 @@ function animate(time) {
   animate.lastTime = now;
 
   updateLamps(dt);
-  updateMoths(dt);
+  updateSceneTone(now);
+  updateMoths(dt, now);
   if (now - state.lastVerseAt > 4600) {
     refreshVerse();
   }

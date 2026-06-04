@@ -25,8 +25,13 @@ body {
   margin: 0;
 }
 
+html {
+  background: var(--bg);
+}
+
 body {
   overflow: hidden;
+  min-height: 100%;
   background:
     radial-gradient(circle at 50% 18%, rgba(123, 102, 255, 0.15), transparent 25%),
     radial-gradient(circle at 50% 42%, rgba(255, 182, 89, 0.1), transparent 30%),
@@ -79,6 +84,24 @@ a {
   box-shadow: var(--shadow);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
+  overflow: hidden;
+}
+
+.panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 20% 0%, rgba(255, 228, 179, 0.08), transparent 36%),
+    radial-gradient(circle at 85% 20%, rgba(148, 124, 255, 0.08), transparent 30%),
+    linear-gradient(120deg, rgba(255, 255, 255, 0.05), transparent 24%, transparent 76%, rgba(255, 255, 255, 0.04));
+  opacity: 0.7;
+}
+
+.panel > * {
+  position: relative;
+  z-index: 1;
 }
 
 .masthead {
@@ -158,6 +181,11 @@ h1 {
   background: rgba(255, 255, 255, 0.08);
 }
 
+.button:active,
+.source-link:active {
+  transform: translateY(0);
+}
+
 .button.primary:hover,
 .button.primary:focus-visible {
   background: linear-gradient(180deg, #ffe4a8, #e2a754);
@@ -214,6 +242,7 @@ kbd {
   color: var(--amber);
   font-size: 1.3rem;
   line-height: 1.05;
+  text-shadow: 0 0 16px rgba(255, 203, 116, 0.12);
 }
 
 .stat:nth-child(4) strong {

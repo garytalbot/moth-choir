@@ -419,6 +419,12 @@ kbd {
   }
 }
 
+@media (max-width: 420px) {
+  .controls {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (hover: none) and (pointer: coarse) {
   .button:hover,
   .button:focus-visible,

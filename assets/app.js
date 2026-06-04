@@ -10,6 +10,7 @@ const sceneSeedEl = document.getElementById('scene-seed');
 const verseEl = document.getElementById('verse');
 const miniNoteEl = document.getElementById('mini-note');
 const buttons = [...document.querySelectorAll('[data-action]')];
+const humButton = document.querySelector('[data-action="hum"]');
 
 const BASE_MOTHS = 42;
 const BASE_LAMPS = 2;
@@ -29,6 +30,7 @@ const MOON_PHASES = [
 const ROOM_PHASES = ['hush', 'murmur', 'chorus', 'swarm'];
 
 const audio = {
+  supported: Boolean(window.AudioContext || window.webkitAudioContext),
   context: null,
   enabled: false,
   master: null,
@@ -324,8 +326,15 @@ function updateLabels() {
           : 'breathing';
   moonPhaseEl.textContent = MOON_PHASES[state.moon];
   pulseValueEl.textContent = `${Math.round(state.pulse * 100)}%`;
-  audioStateEl.textContent = audio.enabled ? 'humming' : 'silent';
+  audioStateEl.textContent = audio.supported
+    ? (audio.context ? (audio.enabled ? 'humming' : 'silent') : 'silent')
+    : 'unavailable';
   sceneSeedEl.textContent = state.seed;
+  if (humButton) {
+    humButton.textContent = audio.enabled ? 'Mute hum' : 'Wake hum';
+    humButton.setAttribute('aria-pressed', String(audio.enabled));
+    humButton.disabled = !audio.supported;
+  }
 }
 
 function ensureAudio() {
@@ -668,14 +677,17 @@ function drawLamp(lamp, time, isCursor = false) {
   const pulse = 1 + Math.sin(time * 0.002 + lamp.x * 0.01 + state.clockOffset) * (0.03 + state.pulse * 0.03);
   const glow = ctx.createRadialGradient(lamp.x, lamp.y, 0, lamp.x, lamp.y, glowRadius);
   const amber = lamp.warmth || 0.8;
-  glow.addColorStop(0, `rgba(255, 236, 186, ${0.25 * pulse})`);
-  glow.addColorStop(0.18, `rgba(255, 196, 109, ${0.24 * amber + state.pulse * 0.04})`);
-  glow.addColorStop(0.55, `rgba(233, 146, 79, ${0.14 * amber + state.resonance * 0.04})`);
+  glow.addColorStop(0, `rgba(255, 243, 214, ${0.28 * pulse})`);
+  glow.addColorStop(0.16, `rgba(255, 202, 121, ${0.26 * amber + state.pulse * 0.045})`);
+  glow.addColorStop(0.52, `rgba(233, 146, 79, ${0.16 * amber + state.resonance * 0.045})`);
   glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
   ctx.fillStyle = glow;
   ctx.beginPath();
   ctx.arc(lamp.x, lamp.y, glowRadius, 0, Math.PI * 2);
   ctx.fill();
+  ctx.restore();
 
   ctx.save();
   ctx.translate(lamp.x, lamp.y);
@@ -707,6 +719,8 @@ function drawMoth(moth, time) {
   if (moth.trail.length > 1) {
     ctx.save();
     ctx.lineWidth = 1;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
     ctx.strokeStyle = `rgba(${wingTint}, ${0.05 + moth.glow * 0.08})`;
     ctx.beginPath();
     moth.trail.forEach((point, index) => {
@@ -761,7 +775,7 @@ function drawMoth(moth, time) {
 function drawScene(time) {
   drawSky(time);
 
-  const ambient = state.dim ? 0.05 : 0.1;
+  const ambient = state.dim ? 0.055 : 0.09;
   ctx.fillStyle = `rgba(0, 0, 0, ${ambient})`;
   ctx.fillRect(0, 0, state.width, state.height);
 
@@ -791,6 +805,13 @@ function drawScene(time) {
   for (const moth of state.moths) {
     drawMoth(moth, time);
   }
+
+  const vignette = ctx.createRadialGradient(state.width * 0.5, state.height * 0.48, Math.min(state.width, state.height) * 0.1, state.width * 0.5, state.height * 0.5, Math.max(state.width, state.height) * 0.84);
+  vignette.addColorStop(0, 'rgba(0, 0, 0, 0)');
+  vignette.addColorStop(0.58, 'rgba(0, 0, 0, 0.02)');
+  vignette.addColorStop(1, `rgba(0, 0, 0, ${state.dim ? 0.34 : 0.28})`);
+  ctx.fillStyle = vignette;
+  ctx.fillRect(0, 0, state.width, state.height);
 }
 
 function updateLamps(dt) {

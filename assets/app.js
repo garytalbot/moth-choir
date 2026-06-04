@@ -287,12 +287,19 @@ function refreshVerse(force = false) {
   state.lastVerseAt = now;
   const lampCount = state.lamps.filter((lamp) => !lamp.cursor).length;
   const mothCount = state.moths.length;
+  const moonLine = state.moon === 4
+    ? 'the full moon has joined the performance'
+    : state.moon === 0
+      ? 'the moon is pretending not to be there'
+      : `the moon is ${MOON_PHASES[state.moon]} and still listening`;
   const opener = choose(state.rng, openers);
   const verb = choose(state.rng, verbs);
   const noun = choose(state.rng, nouns);
-  const middle = lampCount > 4 ? 'the room has become a little cathedral of light' : 'the lanterns are only just starting to learn each other';
+  const middle = lampCount > 4
+    ? 'the room has become a little cathedral of light'
+    : 'the lanterns are only just starting to learn each other';
   const ending = mothCount > 55 ? 'and the ceiling is beginning to sound crowded' : 'and the wings keep the quiet from hardening';
-  state.verse = `${opener} ${verb} ${noun}; ${middle}, ${ending}.`;
+  state.verse = `${opener} ${verb} ${noun}; ${middle}, ${moonLine}, ${ending}.`;
   verseEl.textContent = state.verse;
 }
 

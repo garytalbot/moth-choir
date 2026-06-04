@@ -14,6 +14,7 @@ A nocturnal browser instrument where lamps attract moths, the swarm becomes a ch
 - `D` dims the stage.
 - `S` scatters the moths.
 - `L` drops a lamp.
+- `M` shifts the moon phase.
 - `R` resets the scene.
 
 ## Notes

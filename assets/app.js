@@ -4,6 +4,7 @@ const lampCountEl = document.getElementById('lamp-count');
 const mothCountEl = document.getElementById('moth-count');
 const moodLabelEl = document.getElementById('mood-label');
 const moonPhaseEl = document.getElementById('moon-phase');
+const audioStateEl = document.getElementById('audio-state');
 const pulseValueEl = document.getElementById('pulse-value');
 const sceneSeedEl = document.getElementById('scene-seed');
 const verseEl = document.getElementById('verse');
@@ -13,7 +14,7 @@ const buttons = [...document.querySelectorAll('[data-action]')];
 const BASE_MOTHS = 42;
 const BASE_LAMPS = 2;
 const MAX_LAMPS = 9;
-const STAR_COUNT = 220;
+const STAR_COUNT = 260;
 const DIM_SCALE = 0.58;
 const MOON_PHASES = [
   'new',
@@ -26,6 +27,17 @@ const MOON_PHASES = [
   'waning crescent',
 ];
 const ROOM_PHASES = ['hush', 'murmur', 'chorus', 'swarm'];
+
+const audio = {
+  context: null,
+  enabled: false,
+  master: null,
+  filter: null,
+  drone: null,
+  overtone: null,
+  droneGain: null,
+  overtoneGain: null,
+};
 
 const state = {
   width: 0,
@@ -42,7 +54,7 @@ const state = {
   lamps: [],
   moths: [],
   stars: [],
-  pointer: { x: 0, y: 0, active: false },
+  pointer: { x: 0, y: 0, active: false, down: null },
   lastVerseAt: 0,
   verse: '',
   titlePulse: 0,
@@ -312,7 +324,94 @@ function updateLabels() {
           : 'breathing';
   moonPhaseEl.textContent = MOON_PHASES[state.moon];
   pulseValueEl.textContent = `${Math.round(state.pulse * 100)}%`;
+  audioStateEl.textContent = audio.enabled ? 'humming' : 'silent';
   sceneSeedEl.textContent = state.seed;
+}
+
+function ensureAudio() {
+  if (audio.context) {
+    return audio;
+  }
+
+  const AudioCtor = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtor) {
+    miniNoteEl.textContent = 'Your browser does not expose Web Audio, so the choir will stay visual tonight.';
+    return null;
+  }
+
+  const context = new AudioCtor();
+  const master = context.createGain();
+  const filter = context.createBiquadFilter();
+  const droneGain = context.createGain();
+  const overtoneGain = context.createGain();
+  const drone = context.createOscillator();
+  const overtone = context.createOscillator();
+
+  filter.type = 'lowpass';
+  filter.frequency.value = 440;
+  filter.Q.value = 0.9;
+
+  drone.type = 'triangle';
+  drone.frequency.value = 46;
+  droneGain.gain.value = 0.8;
+
+  overtone.type = 'sine';
+  overtone.frequency.value = 92;
+  overtoneGain.gain.value = 0.22;
+
+  drone.connect(droneGain);
+  overtone.connect(overtoneGain);
+  droneGain.connect(filter);
+  overtoneGain.connect(filter);
+  filter.connect(master);
+  master.connect(context.destination);
+  drone.start();
+  overtone.start();
+
+  audio.context = context;
+  audio.master = master;
+  audio.filter = filter;
+  audio.drone = drone;
+  audio.overtone = overtone;
+  audio.droneGain = droneGain;
+  audio.overtoneGain = overtoneGain;
+  return audio;
+}
+
+async function toggleHum() {
+  const engine = ensureAudio();
+  if (!engine) {
+    return;
+  }
+
+  audio.enabled = !audio.enabled;
+  if (audio.enabled) {
+    await audio.context.resume();
+    miniNoteEl.textContent = 'The choir has started humming under the lamps.';
+  } else {
+    await audio.context.suspend();
+    miniNoteEl.textContent = 'The hum has been muted, but the room remembers the note.';
+  }
+  updateLabels();
+  syncUrl();
+}
+
+function updateAudio(now) {
+  if (!audio.context || !audio.enabled) {
+    return;
+  }
+
+  const time = now / 1000;
+  const lampCount = state.lamps.filter((lamp) => !lamp.cursor).length;
+  const targetGain = clamp(0.008 + state.pulse * 0.02 + lampCount * 0.0015 + state.resonance * 0.007, 0.008, 0.045);
+  const droneFreq = 42 + lampCount * 1.6 + state.moon * 1.7 + state.resonance * 3.5;
+
+  audio.master.gain.setTargetAtTime(targetGain, time, 0.03);
+  audio.filter.frequency.setTargetAtTime(360 + lampCount * 52 + state.moon * 20 + state.pulse * 140, time, 0.05);
+  audio.filter.Q.setTargetAtTime(0.8 + state.resonance * 1.1, time, 0.05);
+  audio.drone.frequency.setTargetAtTime(droneFreq, time, 0.05);
+  audio.overtone.frequency.setTargetAtTime(droneFreq * 2.01, time, 0.05);
+  audioStateEl.textContent = 'humming';
 }
 
 function refreshVerse(force = false) {
@@ -472,11 +571,22 @@ function drawSky(time) {
   ctx.clearRect(0, 0, state.width, state.height);
 
   const sky = ctx.createLinearGradient(0, 0, 0, state.height);
-  sky.addColorStop(0, state.resonance > 0.7 ? '#090812' : '#07080f');
-  sky.addColorStop(0.55, state.dim ? '#04050a' : state.resonance > 0.55 ? '#050611' : '#04060c');
-  sky.addColorStop(1, '#020205');
+  sky.addColorStop(0, state.resonance > 0.7 ? '#090914' : '#070810');
+  sky.addColorStop(0.45, state.dim ? '#04050a' : state.resonance > 0.55 ? '#050611' : '#03050a');
+  sky.addColorStop(1, '#010204');
   ctx.fillStyle = sky;
   ctx.fillRect(0, 0, state.width, state.height);
+
+  const beam = ctx.createLinearGradient(state.width * 0.82, state.height * 0.05, state.width * 0.44, state.height * 0.92);
+  beam.addColorStop(0, `rgba(255, 240, 206, ${0.02 + state.pulse * 0.015})`);
+  beam.addColorStop(0.35, `rgba(255, 218, 146, ${0.012 + state.resonance * 0.016})`);
+  beam.addColorStop(0.62, `rgba(164, 150, 255, ${0.018 + state.pulse * 0.01})`);
+  beam.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  ctx.fillStyle = beam;
+  ctx.fillRect(0, 0, state.width, state.height);
+  ctx.restore();
 
   const mist = ctx.createRadialGradient(
     state.pointer.active ? state.pointer.x : state.width * 0.48,
@@ -486,10 +596,17 @@ function drawSky(time) {
     state.height * 0.45,
     Math.max(state.width, state.height) * 0.85,
   );
-  mist.addColorStop(0, `rgba(133, 104, 255, ${state.dim ? 0.05 : 0.08 + state.pulse * 0.05})`);
-  mist.addColorStop(0.34, `rgba(207, 148, 69, ${0.04 + state.resonance * 0.03})`);
+  mist.addColorStop(0, `rgba(133, 104, 255, ${state.dim ? 0.045 : 0.07 + state.pulse * 0.04})`);
+  mist.addColorStop(0.34, `rgba(207, 148, 69, ${0.035 + state.resonance * 0.025})`);
   mist.addColorStop(1, 'rgba(0, 0, 0, 0)');
   ctx.fillStyle = mist;
+  ctx.fillRect(0, 0, state.width, state.height);
+
+  const floorGlow = ctx.createRadialGradient(state.width * 0.5, state.height * 0.88, 0, state.width * 0.5, state.height * 0.92, Math.max(state.width, state.height) * 0.72);
+  floorGlow.addColorStop(0, `rgba(0, 0, 0, 0)`);
+  floorGlow.addColorStop(0.5, `rgba(0, 0, 0, ${state.dim ? 0.16 : 0.1})`);
+  floorGlow.addColorStop(1, `rgba(0, 0, 0, ${state.dim ? 0.48 : 0.36})`);
+  ctx.fillStyle = floorGlow;
   ctx.fillRect(0, 0, state.width, state.height);
 
   drawMoon(time);
@@ -517,11 +634,11 @@ function getMoonLamp() {
 function drawMoon(time) {
   const moon = getMoonLamp();
   const phase = state.moon / (MOON_PHASES.length - 1);
-  const glowRadius = 104 + moon.power * 36 + state.pulse * 18;
+  const glowRadius = 116 + moon.power * 42 + state.pulse * 20;
   const glow = ctx.createRadialGradient(moon.x, moon.y, 0, moon.x, moon.y, glowRadius);
-  glow.addColorStop(0, `rgba(239, 233, 255, ${0.12 + moon.power * 0.26 + state.pulse * 0.03})`);
-  glow.addColorStop(0.28, `rgba(202, 191, 255, ${0.1 + moon.power * 0.16 + state.resonance * 0.02})`);
-  glow.addColorStop(0.75, 'rgba(180, 170, 230, 0.04)');
+  glow.addColorStop(0, `rgba(242, 237, 255, ${0.14 + moon.power * 0.3 + state.pulse * 0.03})`);
+  glow.addColorStop(0.26, `rgba(210, 198, 255, ${0.11 + moon.power * 0.18 + state.resonance * 0.02})`);
+  glow.addColorStop(0.72, 'rgba(180, 170, 230, 0.05)');
   glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
   ctx.fillStyle = glow;
   ctx.beginPath();
@@ -531,14 +648,14 @@ function drawMoon(time) {
   ctx.save();
   ctx.translate(moon.x, moon.y);
   ctx.rotate(Math.sin(time * 0.0003 + state.clockOffset) * (0.05 + state.pulse * 0.02));
-  ctx.shadowBlur = 24;
-  ctx.shadowColor = 'rgba(224, 214, 255, 0.55)';
-  ctx.fillStyle = 'rgba(230, 225, 255, 0.94)';
+  ctx.shadowBlur = 28;
+  ctx.shadowColor = 'rgba(224, 214, 255, 0.6)';
+  ctx.fillStyle = 'rgba(236, 231, 255, 0.96)';
   ctx.beginPath();
   ctx.arc(0, 0, 20, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.fillStyle = 'rgba(4, 5, 10, 0.72)';
+  ctx.fillStyle = 'rgba(4, 5, 10, 0.76)';
   ctx.beginPath();
   ctx.arc((phase - 0.5) * 20, 0, 19, 0, Math.PI * 2);
   ctx.fill();
@@ -696,6 +813,7 @@ function animate(time) {
   updateLamps(dt);
   updateSceneTone(now);
   updateMoths(dt, now);
+  updateAudio(now);
   if (now - state.lastVerseAt > 4600) {
     refreshVerse();
   }
@@ -709,18 +827,70 @@ function handlePointerMove(event) {
   state.pointer.x = event.clientX - rect.left;
   state.pointer.y = event.clientY - rect.top;
   state.pointer.active = true;
+  if (state.pointer.down) {
+    const dx = state.pointer.x - state.pointer.down.x;
+    const dy = state.pointer.y - state.pointer.down.y;
+    if (dx * dx + dy * dy > 144) {
+      state.pointer.down.moved = true;
+    }
+  }
 }
 
 function handlePointerLeave() {
-  state.pointer.active = false;
+  if (!state.pointer.down) {
+    state.pointer.active = false;
+  }
 }
 
-function handleClick(event) {
+function handlePointerDown(event) {
+  if (event.button != null && event.button !== 0) {
+    return;
+  }
+
   const rect = canvas.getBoundingClientRect();
-  const x = event.clientX - rect.left;
-  const y = event.clientY - rect.top;
-  addLamp(x, y, 1.08 + state.rng() * 0.22);
-  miniNoteEl.textContent = 'A new lamp has entered the room. The moths are rerouting their tiny lives around it.';
+  state.pointer.x = event.clientX - rect.left;
+  state.pointer.y = event.clientY - rect.top;
+  state.pointer.active = true;
+  state.pointer.down = {
+    id: event.pointerId,
+    type: event.pointerType || 'mouse',
+    x: state.pointer.x,
+    y: state.pointer.y,
+    moved: false,
+    startedAt: performance.now(),
+  };
+
+  if (canvas.setPointerCapture) {
+    canvas.setPointerCapture(event.pointerId);
+  }
+}
+
+function handlePointerUp(event) {
+  const session = state.pointer.down;
+  if (session && event.pointerId !== session.id) {
+    return;
+  }
+
+  const rect = canvas.getBoundingClientRect();
+  state.pointer.x = event.clientX - rect.left;
+  state.pointer.y = event.clientY - rect.top;
+
+  const wasTap = !session || !session.moved || session.type === 'mouse';
+  if (wasTap) {
+    addLamp(state.pointer.x, state.pointer.y, 1.08 + state.rng() * 0.22);
+    miniNoteEl.textContent = 'A new lamp has entered the room. The moths are rerouting their tiny lives around it.';
+  }
+
+  state.pointer.active = false;
+  state.pointer.down = null;
+
+  if (canvas.releasePointerCapture && session) {
+    try {
+      canvas.releasePointerCapture(session.id);
+    } catch (error) {
+      // The capture may already be gone if the browser canceled the pointer.
+    }
+  }
 }
 
 async function copySceneLink() {
@@ -749,6 +919,8 @@ function onKeyDown(event) {
     scatterMoths();
   } else if (key === 'm') {
     shiftMoon();
+  } else if (key === 'h') {
+    toggleHum();
   } else if (key === 'l') {
     const x = state.pointer.active ? state.pointer.x : state.width * (0.35 + state.rng() * 0.3);
     const y = state.pointer.active ? state.pointer.y : state.height * (0.35 + state.rng() * 0.25);
@@ -784,6 +956,8 @@ function wireButtons() {
         resetScene(true);
       } else if (action === 'moon') {
         shiftMoon();
+      } else if (action === 'hum') {
+        toggleHum();
       }
     });
   }
@@ -804,7 +978,8 @@ function init() {
   wireButtons();
 
   canvas.addEventListener('pointermove', handlePointerMove);
-  canvas.addEventListener('pointerdown', handleClick);
+  canvas.addEventListener('pointerdown', handlePointerDown);
+  canvas.addEventListener('pointerup', handlePointerUp);
   canvas.addEventListener('pointerleave', handlePointerLeave);
   canvas.addEventListener('pointercancel', handlePointerLeave);
   window.addEventListener('keydown', onKeyDown);

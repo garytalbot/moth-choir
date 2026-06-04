@@ -18,9 +18,9 @@ A subtle ambient hum can be started from a user gesture so the scene does not st
 - `L` drops a lamp.
 - `M` shifts the moon phase.
 - `H` wakes the hum.
-- `P` saves a postcard artifact of the current scene.
+- `P` saves a postcard artifact of the current scene, with a share-sheet fallback when supported.
 - `R` resets the scene.
 
 ## Notes
 
-The scene is built as a single-page static art toy with a canvas-based swarm, a moon-phase lantern, a breathing room pulse, a gesture-gated Web Audio hum, shareable scene links, a downloadable postcard artifact, and a small browser-facing UI.
+The scene is built as a single-page static art toy with a canvas-based swarm, a moon-phase lantern, a breathing room pulse, a gesture-gated Web Audio hum, shareable scene links, a postcard export/share flow, and a small browser-facing UI.

@@ -220,6 +220,13 @@ h1 {
   box-shadow: 0 10px 30px rgba(213, 154, 65, 0.25);
 }
 
+.button[data-action="postcard"] {
+  color: #24170c;
+  border-color: rgba(255, 216, 143, 0.34);
+  background: linear-gradient(180deg, #f6d99d, #bf8744);
+  box-shadow: 0 10px 26px rgba(191, 135, 68, 0.24);
+}
+
 .button:hover,
 .button:focus-visible,
 .source-link:hover,
@@ -237,6 +244,11 @@ h1 {
 .button.primary:hover,
 .button.primary:focus-visible {
   background: linear-gradient(180deg, #ffe4a8, #e2a754);
+}
+
+.button[data-action="postcard"]:hover,
+.button[data-action="postcard"]:focus-visible {
+  background: linear-gradient(180deg, #ffe7b6, #ca924f);
 }
 
 .legend {

@@ -1,0 +1,12 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Moth Choir icon">
+  <rect width="128" height="128" rx="28" fill="#07080E"/>
+  <circle cx="64" cy="60" r="30" fill="#FFD88C" fill-opacity="0.14"/>
+  <circle cx="64" cy="60" r="18" fill="#FFF0C7"/>
+  <circle cx="64" cy="60" r="8" fill="#1E1611"/>
+  <path d="M64 28C49 31 37 43 33 57C29 69 31 79 39 88C47 97 55 101 64 101C73 101 81 97 89 88C97 79 99 69 95 57C91 43 79 31 64 28Z" fill="rgba(255,255,255,0.04)"/>
+  <path d="M64 58C57 54 46 49 35 44C42 53 48 60 57 64C48 69 42 75 35 84C46 80 57 75 64 71" fill="#D5C6FF" fill-opacity="0.28"/>
+  <path d="M64 58C71 54 82 49 93 44C86 53 80 60 71 64C80 69 86 75 93 84C82 80 71 75 64 71" fill="#FFE0A8" fill-opacity="0.28"/>
+  <rect x="61.5" y="50" width="5" height="38" rx="2.5" fill="#1E1611"/>
+  <path d="M64 44C58 36 49 28 43 25" stroke="#F8EEC7" stroke-opacity="0.8" stroke-width="2.2" stroke-linecap="round"/>
+  <path d="M64 44C70 36 79 28 85 25" stroke="#F8EEC7" stroke-opacity="0.8" stroke-width="2.2" stroke-linecap="round"/>
+</svg>

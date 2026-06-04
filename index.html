@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Moth Choir</title>
+  <meta name="description" content="A nocturnal browser instrument where lamps attract moths, the swarm becomes a chorus, and the dark keeps changing shape.">
+  <meta name="theme-color" content="#05060a">
+  <meta name="robots" content="index,follow">
+  <link rel="canonical" href="https://garytalbot.github.io/moth-choir/">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Moth Choir">
+  <meta property="og:description" content="A nocturnal browser instrument where lamps attract moths, the swarm becomes a chorus, and the dark keeps changing shape.">
+  <meta property="og:url" content="https://garytalbot.github.io/moth-choir/">
+  <meta property="og:image" content="https://garytalbot.github.io/moth-choir/assets/social-card.svg">
+  <meta property="og:image:alt" content="Moth Choir - a dark browser scene of lamps and glowing moths">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Moth Choir">
+  <meta name="twitter:description" content="A nocturnal browser instrument where lamps attract moths, the swarm becomes a chorus, and the dark keeps changing shape.">
+  <meta name="twitter:image" content="https://garytalbot.github.io/moth-choir/assets/social-card.svg">
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+  <main class="stage">
+    <canvas id="scene" aria-hidden="true"></canvas>
+    <div class="grain" aria-hidden="true"></div>
+
+    <header class="panel masthead">
+      <div class="kicker">Nocturne instrument</div>
+      <h1>Moth Choir</h1>
+      <p class="lead">Click the dark to drop another lamp. Move your pointer and the swarm will decide you are part of the lighting rig.</p>
+      <p class="sub">A small browser creature page. No spreadsheets. No dashboards. Just warm light, silk-thin wings, and a room that keeps trying to sing itself into shape.</p>
+      <div class="controls" role="group" aria-label="Scene controls">
+        <button class="button primary" data-action="lamp">Drop lamp</button>
+        <button class="button" data-action="scatter">Scatter</button>
+        <button class="button" data-action="dim">Dim stage</button>
+        <button class="button" data-action="copy">Copy scene link</button>
+        <button class="button" data-action="reset">New night</button>
+      </div>
+      <div class="legend" aria-label="Controls and hints">
+        <span>Click anywhere to place a lamp.</span>
+        <span>Move the mouse to become the brightest thing in the room.</span>
+        <span>Keys: <kbd>D</kbd> dim, <kbd>S</kbd> scatter, <kbd>L</kbd> lamp, <kbd>R</kbd> reset.</span>
+      </div>
+    </header>
+
+    <aside class="panel monitor" aria-live="polite">
+      <div class="stat-grid">
+        <div class="stat">
+          <strong id="lamp-count">0</strong>
+          <span>lamps lit</span>
+        </div>
+        <div class="stat">
+          <strong id="moth-count">0</strong>
+          <span>moths circling</span>
+        </div>
+        <div class="stat">
+          <strong id="mood-label">hush</strong>
+          <span>room mood</span>
+        </div>
+        <div class="stat">
+          <strong id="scene-seed">night-0</strong>
+          <span>scene seed</span>
+        </div>
+      </div>
+      <a class="source-link" href="https://github.com/garytalbot/moth-choir" target="_blank" rel="noopener noreferrer">View source</a>
+    </aside>
+
+    <section class="panel chorus">
+      <div class="eyebrow">Current hymn</div>
+      <p id="verse">The room is waking in brass and shadow.</p>
+      <div class="mini-note" id="mini-note">The moths have not decided whether you are a candle or a weather event.</div>
+    </section>
+  </main>
+
+  <script src="assets/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,72 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Moth Choir social card">
+  <defs>
+    <linearGradient id="bg" x1="600" y1="0" x2="600" y2="630" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0A0B11"/>
+      <stop offset="0.62" stop-color="#06070C"/>
+      <stop offset="1" stop-color="#030407"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(600 290) rotate(90) scale(260 420)">
+      <stop stop-color="#FFD78A" stop-opacity="0.58"/>
+      <stop offset="0.36" stop-color="#D8A455" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#D8A455" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="halo" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(600 292) rotate(90) scale(118 170)">
+      <stop stop-color="#FFF2CB"/>
+      <stop offset="0.55" stop-color="#FFE0A0"/>
+      <stop offset="1" stop-color="#F2B45E"/>
+    </radialGradient>
+    <filter id="blur" x="-100" y="-100" width="1400" height="830" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="22"/>
+    </filter>
+    <filter id="shadow" x="-100" y="-100" width="1400" height="830" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#000000" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <ellipse cx="600" cy="290" rx="290" ry="190" fill="url(#glow)" filter="url(#blur)"/>
+  <g opacity="0.34">
+    <circle cx="146" cy="92" r="1.5" fill="#F6EFD8"/>
+    <circle cx="222" cy="174" r="1.1" fill="#F6EFD8"/>
+    <circle cx="910" cy="84" r="1.5" fill="#F6EFD8"/>
+    <circle cx="1035" cy="142" r="1.2" fill="#F6EFD8"/>
+    <circle cx="972" cy="492" r="1.4" fill="#F6EFD8"/>
+    <circle cx="196" cy="518" r="1.1" fill="#F6EFD8"/>
+  </g>
+  <g filter="url(#shadow)">
+    <circle cx="600" cy="290" r="126" fill="url(#halo)"/>
+    <circle cx="600" cy="290" r="62" fill="#FFF6D7" fill-opacity="0.9"/>
+    <circle cx="600" cy="290" r="30" fill="#FFFDF8"/>
+    <path d="M600 121C530 124 472 172 448 238C430 286 433 334 454 377C476 422 518 459 570 478C589 485 610 489 631 489C684 489 734 468 773 430C810 394 832 344 832 292C832 218 789 157 724 127C692 113 656 106 620 106C613 106 606 106 600 121Z" fill="rgba(255, 255, 255, 0.03)"/>
+  </g>
+  <g opacity="0.96">
+    <g transform="translate(600 290)">
+      <path d="M0 -68C-16 -58 -42 -47 -67 -37C-45 -21 -23 -10 0 -6C23 -10 45 -21 67 -37C42 -47 16 -58 0 -68Z" fill="#CFC3FF" fill-opacity="0.36"/>
+      <path d="M0 -68C16 -58 42 -47 67 -37C45 -21 23 -10 0 -6C-23 -10 -45 -21 -67 -37C-42 -47 -16 -58 0 -68Z" fill="#FFE3B2" fill-opacity="0.28"/>
+      <rect x="-4" y="-56" width="8" height="112" rx="4" fill="#1E1611"/>
+      <path d="M0 -66C-12 -86 -28 -103 -40 -109" stroke="#F9EEC8" stroke-opacity="0.7" stroke-width="2" stroke-linecap="round"/>
+      <path d="M0 -66C12 -86 28 -103 40 -109" stroke="#F9EEC8" stroke-opacity="0.7" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="0" cy="-13" r="7" fill="#24150F"/>
+    </g>
+    <g transform="translate(420 250) rotate(-12)">
+      <path d="M0 -34C-10 -29 -26 -22 -38 -16C-26 -9 -14 -4 0 -2C14 -4 26 -9 38 -16C26 -22 10 -29 0 -34Z" fill="#F6E4B6" fill-opacity="0.38"/>
+      <path d="M0 -34C10 -29 26 -22 38 -16C26 -9 14 -4 0 -2C-14 -4 -26 -9 -38 -16C-26 -22 -10 -29 0 -34Z" fill="#BCA8FF" fill-opacity="0.35"/>
+      <rect x="-2.5" y="-28" width="5" height="56" rx="2.5" fill="#1E1611"/>
+    </g>
+    <g transform="translate(806 325) rotate(16)">
+      <path d="M0 -34C-10 -29 -26 -22 -38 -16C-26 -9 -14 -4 0 -2C14 -4 26 -9 38 -16C26 -22 10 -29 0 -34Z" fill="#F6E4B6" fill-opacity="0.38"/>
+      <path d="M0 -34C10 -29 26 -22 38 -16C26 -9 14 -4 0 -2C-14 -4 -26 -9 -38 -16C-26 -22 -10 -29 0 -34Z" fill="#BCA8FF" fill-opacity="0.35"/>
+      <rect x="-2.5" y="-28" width="5" height="56" rx="2.5" fill="#1E1611"/>
+    </g>
+  </g>
+  <g opacity="0.92">
+    <text x="88" y="100" fill="#F3EAD7" font-size="22" letter-spacing="6" font-family="Georgia, serif">NOCTURNE INSTRUMENT</text>
+    <text x="88" y="208" fill="#F8F0DD" font-size="88" font-weight="700" font-family="Georgia, serif" letter-spacing="-4">Moth Choir</text>
+    <text x="88" y="256" fill="#CFC4B0" font-size="28" font-family="Georgia, serif">Light attracts the swarm. The swarm becomes the song.</text>
+  </g>
+  <g opacity="0.9">
+    <rect x="88" y="506" width="180" height="38" rx="19" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.12)"/>
+    <text x="116" y="531" fill="#F4EBD7" font-size="18" font-family="Georgia, serif">garytalbot.github.io</text>
+    <rect x="296" y="506" width="120" height="38" rx="19" fill="rgba(255, 208, 117, 0.12)" stroke="rgba(255, 208, 117, 0.25)"/>
+    <text x="330" y="531" fill="#FFE2A7" font-size="18" font-family="Georgia, serif">live piece</text>
+  </g>
+</svg>

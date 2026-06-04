@@ -1,0 +1,627 @@
+const canvas = document.getElementById('scene');
+const ctx = canvas.getContext('2d', { alpha: true });
+const lampCountEl = document.getElementById('lamp-count');
+const mothCountEl = document.getElementById('moth-count');
+const moodLabelEl = document.getElementById('mood-label');
+const sceneSeedEl = document.getElementById('scene-seed');
+const verseEl = document.getElementById('verse');
+const miniNoteEl = document.getElementById('mini-note');
+const buttons = [...document.querySelectorAll('[data-action]')];
+
+const BASE_MOTHS = 42;
+const BASE_LAMPS = 2;
+const MAX_LAMPS = 9;
+const STAR_COUNT = 220;
+const DIM_SCALE = 0.58;
+
+const state = {
+  width: 0,
+  height: 0,
+  dpr: 1,
+  seed: '',
+  rng: null,
+  dim: false,
+  lamps: [],
+  moths: [],
+  stars: [],
+  pointer: { x: 0, y: 0, active: false },
+  lastVerseAt: 0,
+  verse: '',
+  titlePulse: 0,
+};
+
+const openers = [
+  'The room is',
+  'The dark keeps',
+  'Every wingbeat',
+  'Somewhere under the lamp, the night is',
+  'The choir is',
+  'Your shadow is making the lamps',
+];
+
+const verbs = [
+  'breathing',
+  'listening',
+  'tilting',
+  'gathering',
+  'humming',
+  'leaning',
+  'remembering',
+  'stitching itself'
+];
+
+const nouns = [
+  'around the amber seam',
+  'through the dust halo',
+  'into the soft brass',
+  'toward the brightest pulse',
+  'like a prayer with wings',
+  'around the warmest stitch in the dark',
+  'where the room goes almost kind'
+];
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function hashSeed(input) {
+  let hash = 2166136261;
+  for (let i = 0; i < input.length; i += 1) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function mulberry32(seed) {
+  let t = seed >>> 0;
+  return function random() {
+    t += 0x6D2B79F5;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function makeRng(seed) {
+  return mulberry32(hashSeed(seed));
+}
+
+function choose(rng, items) {
+  return items[Math.floor(rng() * items.length) % items.length];
+}
+
+function makeSeed() {
+  const raw = Math.floor((Date.now() + Math.random() * 100000) % 1e9).toString(36);
+  return `night-${raw}`;
+}
+
+function readConfig() {
+  const params = new URLSearchParams(location.search);
+  const seed = params.get('seed') || makeSeed();
+  const lamps = clamp(Number.parseInt(params.get('lamps') || '', 10) || BASE_LAMPS, 1, MAX_LAMPS);
+  const moths = clamp(Number.parseInt(params.get('moths') || '', 10) || BASE_MOTHS, 18, 84);
+  const dim = params.get('dim') === '1';
+  return { seed, lamps, moths, dim };
+}
+
+function syncUrl() {
+  const url = new URL(location.href);
+  url.searchParams.set('seed', state.seed);
+  url.searchParams.set('lamps', String(Math.min(state.lamps.filter((lamp) => !lamp.cursor).length, MAX_LAMPS)));
+  url.searchParams.set('moths', String(state.moths.length));
+  url.searchParams.set('dim', state.dim ? '1' : '0');
+  history.replaceState(null, '', url);
+}
+
+function resize() {
+  state.dpr = Math.min(window.devicePixelRatio || 1, 2);
+  state.width = window.innerWidth;
+  state.height = window.innerHeight;
+  canvas.width = Math.floor(state.width * state.dpr);
+  canvas.height = Math.floor(state.height * state.dpr);
+  canvas.style.width = `${state.width}px`;
+  canvas.style.height = `${state.height}px`;
+  ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+  seedStars();
+  if (!state.lamps.length) {
+    resetScene(false);
+  }
+}
+
+function seedStars() {
+  const rng = makeRng(`${state.seed}:stars`);
+  state.stars = Array.from({ length: STAR_COUNT }, () => ({
+    x: rng() * state.width,
+    y: rng() * state.height * 0.84,
+    r: 0.4 + rng() * 1.5,
+    a: 0.1 + rng() * 0.65,
+    wobble: rng() * Math.PI * 2,
+  }));
+}
+
+function makeLamp(x, y, permanent = false, power = 1) {
+  return {
+    x,
+    y,
+    power,
+    warmth: 0.72 + state.rng() * 0.35,
+    life: permanent ? Number.POSITIVE_INFINITY : 12 + state.rng() * 12,
+    permanent,
+    cursor: false,
+  };
+}
+
+function makeMoth(index) {
+  const edge = index % 4;
+  const margin = 40;
+  const x = edge === 0 ? -margin - state.rng() * 80 : edge === 1 ? state.width + margin + state.rng() * 80 : state.rng() * state.width;
+  const y = edge === 2 ? -margin - state.rng() * 80 : edge === 3 ? state.height + margin + state.rng() * 80 : state.rng() * state.height * 0.82;
+  const tone = state.rng();
+  return {
+    x,
+    y,
+    vx: (state.rng() - 0.5) * 1.4,
+    vy: (state.rng() - 0.5) * 1.4,
+    wing: state.rng() * Math.PI * 2,
+    tone,
+    phase: state.rng() * Math.PI * 2,
+    glow: 0.25 + tone * 0.35,
+    trail: [],
+  };
+}
+
+function resetScene(advanceSeed = true) {
+  if (advanceSeed || !state.seed) {
+    state.seed = advanceSeed ? makeSeed() : state.seed || makeSeed();
+  }
+  state.rng = makeRng(state.seed);
+  state.dim = readConfig().dim;
+  state.lamps = [];
+  state.moths = [];
+  const config = readConfig();
+  for (let i = 0; i < config.moths; i += 1) {
+    state.moths.push(makeMoth(i));
+  }
+  const centerX = state.width * 0.51;
+  const centerY = state.height * 0.46;
+  const ring = Math.min(state.width, state.height) * 0.18;
+  for (let i = 0; i < config.lamps; i += 1) {
+    const angle = (i / Math.max(config.lamps, 1)) * Math.PI * 2 - Math.PI / 2;
+    const jitter = (state.rng() - 0.5) * ring * 0.6;
+    state.lamps.push(
+      makeLamp(
+        centerX + Math.cos(angle) * (ring + jitter),
+        centerY + Math.sin(angle) * (ring * 0.38 + jitter * 0.4),
+        i === 0,
+        1 + state.rng() * 0.6,
+      ),
+    );
+  }
+  state.pointer.active = false;
+  updateLabels();
+  refreshVerse(true);
+  miniNoteEl.textContent = 'A fresh night has been cued. The moths are already arguing with the lanterns.';
+  syncUrl();
+}
+
+function addLamp(x, y, power = 1.1) {
+  const lamps = state.lamps.filter((lamp) => !lamp.cursor);
+  if (lamps.length >= MAX_LAMPS) {
+    lamps.shift();
+  }
+  lamps.push(makeLamp(x, y, false, power));
+  state.lamps = lamps;
+  state.titlePulse = performance.now();
+  updateLabels();
+  refreshVerse(true);
+  syncUrl();
+}
+
+function makeCursorLamp() {
+  if (!state.pointer.active) {
+    return null;
+  }
+  return {
+    x: state.pointer.x,
+    y: state.pointer.y,
+    power: 1.5,
+    warmth: 0.9,
+    life: Number.POSITIVE_INFINITY,
+    cursor: true,
+    permanent: false,
+  };
+}
+
+function scatterMoths() {
+  for (const moth of state.moths) {
+    const side = Math.floor(state.rng() * 4);
+    const margin = 50;
+    moth.x = side === 0 ? -margin : side === 1 ? state.width + margin : state.rng() * state.width;
+    moth.y = side === 2 ? -margin : side === 3 ? state.height + margin : state.rng() * state.height * 0.82;
+    moth.vx = (state.rng() - 0.5) * 2.2;
+    moth.vy = (state.rng() - 0.5) * 2.2;
+    moth.phase = state.rng() * Math.PI * 2;
+    moth.trail.length = 0;
+  }
+  miniNoteEl.textContent = 'The swarm has been shaken loose. It will reassemble around the next warm thing that moves.';
+  refreshVerse(true);
+}
+
+function toggleDim() {
+  state.dim = !state.dim;
+  updateLabels();
+  refreshVerse(true);
+  syncUrl();
+}
+
+function updateLabels() {
+  lampCountEl.textContent = String(state.lamps.filter((lamp) => !lamp.cursor).length);
+  mothCountEl.textContent = String(state.moths.length);
+  moodLabelEl.textContent = state.dim ? 'hushed' : 'glimmer';
+  sceneSeedEl.textContent = state.seed;
+}
+
+function refreshVerse(force = false) {
+  const now = performance.now();
+  if (!force && now - state.lastVerseAt < 4200) {
+    return;
+  }
+
+  state.lastVerseAt = now;
+  const lampCount = state.lamps.filter((lamp) => !lamp.cursor).length;
+  const mothCount = state.moths.length;
+  const opener = choose(state.rng, openers);
+  const verb = choose(state.rng, verbs);
+  const noun = choose(state.rng, nouns);
+  const middle = lampCount > 4 ? 'the room has become a little cathedral of light' : 'the lanterns are only just starting to learn each other';
+  const ending = mothCount > 55 ? 'and the ceiling is beginning to sound crowded' : 'and the wings keep the quiet from hardening';
+  state.verse = `${opener} ${verb} ${noun}; ${middle}, ${ending}.`;
+  verseEl.textContent = state.verse;
+}
+
+function updateMoths(dt) {
+  const lamps = state.lamps.map((lamp) => ({ ...lamp }));
+  const cursorLamp = makeCursorLamp();
+  if (cursorLamp) {
+    lamps.push(cursorLamp);
+  }
+
+  for (const moth of state.moths) {
+    let bestLamp = null;
+    let bestScore = -Infinity;
+    for (const lamp of lamps) {
+      const dx = lamp.x - moth.x;
+      const dy = lamp.y - moth.y;
+      const distSq = dx * dx + dy * dy + 120;
+      const score = (lamp.power * 1200) / distSq;
+      if (score > bestScore) {
+        bestScore = score;
+        bestLamp = lamp;
+      }
+    }
+
+    if (!bestLamp) {
+      bestLamp = {
+        x: state.width * 0.5,
+        y: state.height * 0.45,
+        power: 0.8,
+        warmth: 0.6,
+      };
+    }
+
+    const dx = bestLamp.x - moth.x;
+    const dy = bestLamp.y - moth.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    const nx = dx / dist;
+    const ny = dy / dist;
+    const swirl = state.dim ? 0.05 : 0.075;
+    const pull = clamp((bestLamp.power * 170) / (dist * dist + 120), 0.014, state.dim ? 0.18 : 0.26);
+    const orbit = (bestLamp.power * 0.14) + moth.tone * 0.08;
+
+    moth.vx += nx * pull * dt * 60;
+    moth.vy += ny * pull * dt * 60;
+    moth.vx += -ny * orbit * swirl * dt * 60;
+    moth.vy += nx * orbit * swirl * dt * 60;
+
+    if (dist < 72) {
+      moth.vx += -ny * 0.03 * dt * 60;
+      moth.vy += nx * 0.03 * dt * 60;
+    }
+
+    moth.vx *= state.dim ? 0.992 : 0.989;
+    moth.vy *= state.dim ? 0.992 : 0.989;
+
+    const maxSpeed = state.dim ? 2.4 : 3.1;
+    const speed = Math.hypot(moth.vx, moth.vy);
+    if (speed > maxSpeed) {
+      moth.vx = (moth.vx / speed) * maxSpeed;
+      moth.vy = (moth.vy / speed) * maxSpeed;
+    }
+
+    moth.x += moth.vx * dt * 60;
+    moth.y += moth.vy * dt * 60;
+    moth.wing += dt * (8 + moth.tone * 4);
+
+    const margin = 80;
+    if (moth.x < -margin) moth.x = state.width + margin;
+    if (moth.x > state.width + margin) moth.x = -margin;
+    if (moth.y < -margin) moth.y = state.height + margin * 0.55;
+    if (moth.y > state.height + margin) moth.y = -margin * 0.55;
+
+    moth.trail.push({ x: moth.x, y: moth.y });
+    if (moth.trail.length > 8) {
+      moth.trail.shift();
+    }
+  }
+}
+
+function drawSky(time) {
+  ctx.clearRect(0, 0, state.width, state.height);
+
+  const sky = ctx.createLinearGradient(0, 0, 0, state.height);
+  sky.addColorStop(0, '#07080f');
+  sky.addColorStop(0.55, state.dim ? '#04050a' : '#04060c');
+  sky.addColorStop(1, '#020205');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, state.width, state.height);
+
+  const mist = ctx.createRadialGradient(
+    state.pointer.active ? state.pointer.x : state.width * 0.48,
+    state.pointer.active ? state.pointer.y * 0.92 : state.height * 0.36,
+    30,
+    state.width * 0.5,
+    state.height * 0.45,
+    Math.max(state.width, state.height) * 0.85,
+  );
+  mist.addColorStop(0, `rgba(133, 104, 255, ${state.dim ? 0.05 : 0.1})`);
+  mist.addColorStop(0.34, 'rgba(207, 148, 69, 0.05)');
+  mist.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = mist;
+  ctx.fillRect(0, 0, state.width, state.height);
+
+  for (const star of state.stars) {
+    const twinkle = 0.35 + Math.sin(time * 0.0007 + star.wobble) * 0.25;
+    ctx.fillStyle = `rgba(247, 236, 210, ${star.a * twinkle})`;
+    ctx.beginPath();
+    ctx.arc(star.x, star.y + Math.sin(time * 0.0004 + star.wobble) * 0.5, star.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawLamp(lamp, time, isCursor = false) {
+  const glowRadius = isCursor ? 150 : 180 * lamp.power;
+  const coreRadius = isCursor ? 5 : 6 + lamp.power * 3;
+  const pulse = 1 + Math.sin(time * 0.002 + lamp.x * 0.01) * 0.04;
+  const glow = ctx.createRadialGradient(lamp.x, lamp.y, 0, lamp.x, lamp.y, glowRadius);
+  const amber = lamp.warmth || 0.8;
+  glow.addColorStop(0, `rgba(255, 236, 186, ${0.25 * pulse})`);
+  glow.addColorStop(0.18, `rgba(255, 196, 109, ${0.24 * amber})`);
+  glow.addColorStop(0.55, `rgba(233, 146, 79, ${0.14 * amber})`);
+  glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(lamp.x, lamp.y, glowRadius, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.save();
+  ctx.translate(lamp.x, lamp.y);
+  ctx.shadowBlur = 18;
+  ctx.shadowColor = `rgba(255, 202, 118, ${0.65 * amber})`;
+  ctx.fillStyle = `rgba(255, 214, 147, ${isCursor ? 0.9 : 0.85})`;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, coreRadius + 6, coreRadius + 3, Math.sin(time * 0.001 + lamp.power) * 0.08, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = isCursor ? 'rgba(255, 253, 244, 0.92)' : 'rgba(255, 224, 179, 0.95)';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, coreRadius, coreRadius * 0.85, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawMoth(moth, time) {
+  const angle = Math.atan2(moth.vy, moth.vx);
+  const wingOpen = 0.7 + Math.sin(time * 0.014 + moth.phase) * 0.28;
+  const bodyAlpha = state.dim ? 0.74 : 0.9;
+  const wingTint = moth.tone > 0.5 ? '218, 193, 255' : '255, 225, 188';
+
+  if (moth.trail.length > 1) {
+    ctx.save();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = `rgba(${wingTint}, ${0.05 + moth.glow * 0.08})`;
+    ctx.beginPath();
+    moth.trail.forEach((point, index) => {
+      if (index === 0) {
+        ctx.moveTo(point.x, point.y);
+      } else {
+        ctx.lineTo(point.x, point.y);
+      }
+    });
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  ctx.save();
+  ctx.translate(moth.x, moth.y);
+  ctx.rotate(angle + Math.PI * 0.5);
+  ctx.shadowBlur = state.dim ? 4 : 10;
+  ctx.shadowColor = `rgba(${wingTint}, ${0.25 + moth.glow * 0.18})`;
+
+  ctx.fillStyle = `rgba(${wingTint}, ${0.18 * bodyAlpha})`;
+  ctx.beginPath();
+  ctx.ellipse(-5, -1, 9 * wingOpen, 17 * wingOpen, -0.45, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(5, -1, 9 * wingOpen, 17 * wingOpen, 0.45, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = `rgba(24, 16, 10, ${0.65 * bodyAlpha})`;
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(0, -10);
+  ctx.lineTo(0, 10);
+  ctx.stroke();
+
+  ctx.fillStyle = `rgba(20, 15, 12, ${bodyAlpha})`;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 2.6, 11, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = `rgba(255, 231, 192, ${0.65 * bodyAlpha})`;
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(0, -10);
+  ctx.lineTo(-5.5, -16);
+  ctx.moveTo(0, -10);
+  ctx.lineTo(5.5, -16);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function drawScene(time) {
+  drawSky(time);
+
+  const ambient = state.dim ? 0.05 : 0.1;
+  ctx.fillStyle = `rgba(0, 0, 0, ${ambient})`;
+  ctx.fillRect(0, 0, state.width, state.height);
+
+  for (const lamp of state.lamps) {
+    if (lamp.cursor) {
+      continue;
+    }
+    drawLamp(lamp, time, false);
+  }
+
+  if (state.pointer.active) {
+    drawLamp(makeCursorLamp(), time, true);
+  }
+
+  for (const moth of state.moths) {
+    drawMoth(moth, time);
+  }
+}
+
+function updateLamps(dt) {
+  state.lamps = state.lamps
+    .filter((lamp) => lamp.cursor || lamp.permanent || lamp.life > 0.05)
+    .map((lamp) => {
+      if (!lamp.permanent && !lamp.cursor) {
+        lamp.life -= dt * (state.dim ? 0.5 : 0.35);
+        lamp.power = clamp(lamp.power * 0.999, 0.55, 1.65);
+      }
+      return lamp;
+    });
+}
+
+function animate(time) {
+  const now = time || performance.now();
+  const dt = clamp((now - (animate.lastTime || now)) / 1000, 0.001, 0.032);
+  animate.lastTime = now;
+
+  updateLamps(dt);
+  updateMoths(dt);
+  if (now - state.lastVerseAt > 4600) {
+    refreshVerse();
+  }
+  updateLabels();
+  drawScene(now);
+  requestAnimationFrame(animate);
+}
+
+function handlePointerMove(event) {
+  const rect = canvas.getBoundingClientRect();
+  state.pointer.x = event.clientX - rect.left;
+  state.pointer.y = event.clientY - rect.top;
+  state.pointer.active = true;
+}
+
+function handlePointerLeave() {
+  state.pointer.active = false;
+}
+
+function handleClick(event) {
+  const rect = canvas.getBoundingClientRect();
+  const x = event.clientX - rect.left;
+  const y = event.clientY - rect.top;
+  addLamp(x, y, 1.08 + state.rng() * 0.22);
+  miniNoteEl.textContent = 'A new lamp has entered the room. The moths are rerouting their tiny lives around it.';
+}
+
+async function copySceneLink() {
+  const url = new URL(location.href);
+  url.searchParams.set('seed', state.seed);
+  url.searchParams.set('lamps', String(Math.min(state.lamps.filter((lamp) => !lamp.cursor).length, MAX_LAMPS)));
+  url.searchParams.set('moths', String(state.moths.length));
+  url.searchParams.set('dim', state.dim ? '1' : '0');
+  try {
+    await navigator.clipboard.writeText(url.toString());
+    miniNoteEl.textContent = 'Scene link copied. The exact number of moths and lamps now has a paper trail.';
+  } catch (error) {
+    miniNoteEl.textContent = 'Copy failed. Your browser refused to hand over the tiny spell, but the scene is still alive.';
+  }
+}
+
+function onKeyDown(event) {
+  if (event.repeat) {
+    return;
+  }
+  const key = event.key.toLowerCase();
+  if (key === 'd') {
+    toggleDim();
+  } else if (key === 's') {
+    scatterMoths();
+  } else if (key === 'l') {
+    const x = state.pointer.active ? state.pointer.x : state.width * (0.35 + state.rng() * 0.3);
+    const y = state.pointer.active ? state.pointer.y : state.height * (0.35 + state.rng() * 0.25);
+    addLamp(x, y, 1.03 + state.rng() * 0.32);
+  } else if (key === 'r') {
+    resetScene(true);
+  }
+}
+
+function wireButtons() {
+  for (const button of buttons) {
+    button.addEventListener('click', () => {
+      const action = button.dataset.action;
+      if (action === 'lamp') {
+        const x = state.pointer.active ? state.pointer.x : state.width * (0.34 + state.rng() * 0.32);
+        const y = state.pointer.active ? state.pointer.y : state.height * (0.32 + state.rng() * 0.24);
+        addLamp(x, y, 1.05 + state.rng() * 0.24);
+      } else if (action === 'scatter') {
+        scatterMoths();
+      } else if (action === 'dim') {
+        toggleDim();
+      } else if (action === 'copy') {
+        copySceneLink();
+      } else if (action === 'reset') {
+        resetScene(true);
+      }
+    });
+  }
+}
+
+function init() {
+  const config = readConfig();
+  state.seed = config.seed;
+  state.rng = makeRng(state.seed);
+  state.dim = config.dim;
+  state.moths = Array.from({ length: config.moths }, (_, index) => makeMoth(index));
+  state.lamps = [];
+  resize();
+  resetScene(false);
+  updateLabels();
+  refreshVerse(true);
+  wireButtons();
+
+  canvas.addEventListener('pointermove', handlePointerMove);
+  canvas.addEventListener('pointerdown', handleClick);
+  canvas.addEventListener('pointerleave', handlePointerLeave);
+  canvas.addEventListener('pointercancel', handlePointerLeave);
+  window.addEventListener('keydown', onKeyDown);
+  window.addEventListener('resize', resize);
+
+  requestAnimationFrame(animate);
+}
+
+init();

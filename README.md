@@ -24,3 +24,5 @@ A subtle ambient hum can be started from a user gesture so the scene does not st
 ## Notes
 
 The scene is built as a single-page static art toy with a canvas-based swarm, a moon-phase lantern, a breathing room pulse, a gesture-gated Web Audio hum, shareable scene links, a postcard export/share flow, and a small browser-facing UI.
+
+Latest polish pass: the postcard export now prefers the native share sheet and falls back to an SVG download, while the ambient hum was tuned a little softer and stranger.

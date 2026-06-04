@@ -1107,11 +1107,33 @@ function buildSceneArtifact() {
 
 async function savePostcard() {
   const svg = buildSceneArtifact();
+  const fileName = sceneArtifactName();
+
+  if (navigator.share && navigator.canShare) {
+    const file = new File([svg], fileName, { type: 'image/svg+xml;charset=utf-8' });
+    if (navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({
+          title: 'Moth Choir postcard',
+          text: 'A browser-native night score from Moth Choir.',
+          files: [file],
+        });
+        miniNoteEl.textContent = 'The postcard left as a shareable SVG straight from the browser.';
+        return;
+      } catch (error) {
+        if (error && error.name === 'AbortError') {
+          miniNoteEl.textContent = 'The share sheet closed before the postcard left the room.';
+          return;
+        }
+      }
+    }
+  }
+
   const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
-  anchor.download = sceneArtifactName();
+  anchor.download = fileName;
   anchor.rel = 'noopener';
   document.body.appendChild(anchor);
   anchor.click();

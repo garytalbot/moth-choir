@@ -997,7 +997,6 @@ function init() {
   updateLabels();
   refreshVerse(true);
   wireButtons();
-
   canvas.addEventListener('pointermove', handlePointerMove);
   canvas.addEventListener('pointerdown', handlePointerDown);
   canvas.addEventListener('pointerup', handlePointerUp);
@@ -1005,6 +1004,16 @@ function init() {
   canvas.addEventListener('pointercancel', handlePointerLeave);
   window.addEventListener('keydown', onKeyDown);
   window.addEventListener('resize', resize);
+  document.addEventListener('visibilitychange', () => {
+    if (!audio.context || !audio.enabled) {
+      return;
+    }
+    if (document.hidden) {
+      audio.context.suspend().catch(() => {});
+    } else {
+      audio.context.resume().catch(() => {});
+    }
+  });
 
   requestAnimationFrame(animate);
 }

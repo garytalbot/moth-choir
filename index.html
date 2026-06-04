@@ -4,20 +4,20 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Moth Choir</title>
-  <meta name="description" content="A nocturnal browser instrument where lamps attract moths, the swarm becomes a chorus, the moon keeps changing the room, and the dark keeps changing shape.">
+  <meta name="description" content="A nocturnal browser instrument where lamps attract moths, the swarm becomes a chorus, the moon keeps changing the room, the dark keeps changing shape, and a subtle hum waits behind a user gesture.">
   <meta name="theme-color" content="#05060a">
   <meta name="robots" content="index,follow">
   <link rel="canonical" href="https://garytalbot.github.io/moth-choir/">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Moth Choir">
-  <meta property="og:description" content="A nocturnal browser instrument where lamps attract moths, the swarm becomes a chorus, the moon keeps changing the room, and the dark keeps changing shape.">
+  <meta property="og:description" content="A nocturnal browser instrument where lamps attract moths, the swarm becomes a chorus, the moon keeps changing the room, the dark keeps changing shape, and a subtle hum waits behind a user gesture.">
   <meta property="og:url" content="https://garytalbot.github.io/moth-choir/">
   <meta property="og:image" content="https://garytalbot.github.io/moth-choir/assets/social-card.svg">
   <meta property="og:image:alt" content="Moth Choir - a dark browser scene of lamps and glowing moths">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Moth Choir">
-  <meta name="twitter:description" content="A nocturnal browser instrument where lamps attract moths, the swarm becomes a chorus, the moon keeps changing the room, and the dark keeps changing shape.">
+  <meta name="twitter:description" content="A nocturnal browser instrument where lamps attract moths, the swarm becomes a chorus, the moon keeps changing the room, the dark keeps changing shape, and a subtle hum waits behind a user gesture.">
   <meta name="twitter:image" content="https://garytalbot.github.io/moth-choir/assets/social-card.svg">
   <link rel="stylesheet" href="assets/styles.css">
 </head>
@@ -36,13 +36,14 @@
         <button class="button" data-action="scatter">Scatter</button>
         <button class="button" data-action="dim">Dim stage</button>
         <button class="button" data-action="moon">Shift moon</button>
-        <button class="button" data-action="hum">Wake hum</button>
+        <button class="button" data-action="hum" aria-pressed="false">Wake hum</button>
         <button class="button" data-action="copy">Copy scene link</button>
         <button class="button" data-action="reset">New night</button>
       </div>
       <div class="legend" aria-label="Controls and hints">
         <span>Click anywhere to place a lamp.</span>
         <span>Move the mouse to become the brightest thing in the room.</span>
+        <span>Click or tap Wake hum to start the ambient layer.</span>
         <span>Keys: <kbd>D</kbd> dim, <kbd>S</kbd> scatter, <kbd>L</kbd> lamp, <kbd>M</kbd> moon, <kbd>H</kbd> hum, <kbd>R</kbd> reset.</span>
       </div>
     </header>

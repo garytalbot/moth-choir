@@ -388,6 +388,12 @@ kbd {
   .stat-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
+
+  .controls {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.55rem;
+  }
 }
 
 @media (max-width: 560px) {
@@ -415,12 +421,6 @@ kbd {
   .button,
   .source-link {
     width: 100%;
-  }
-
-  .controls {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.55rem;
   }
 }
 

@@ -63,6 +63,8 @@ const state = {
   titlePulse: 0,
 };
 
+let animationFrameId = null;
+
 const openers = [
   'The room is',
   'The dark keeps',
@@ -876,6 +878,12 @@ function updateLamps(dt) {
 }
 
 function animate(time) {
+  if (document.hidden) {
+    animationFrameId = null;
+    animate.lastTime = null;
+    return;
+  }
+
   const now = time || performance.now();
   const dt = clamp((now - (animate.lastTime || now)) / 1000, 0.001, 0.032);
   animate.lastTime = now;
@@ -889,7 +897,23 @@ function animate(time) {
   }
   updateLabels();
   drawScene(now);
-  requestAnimationFrame(animate);
+  animationFrameId = requestAnimationFrame(animate);
+}
+
+function startAnimation() {
+  if (animationFrameId !== null || document.hidden) {
+    return;
+  }
+
+  animationFrameId = requestAnimationFrame(animate);
+}
+
+function stopAnimation() {
+  if (animationFrameId !== null) {
+    cancelAnimationFrame(animationFrameId);
+    animationFrameId = null;
+  }
+  animate.lastTime = null;
 }
 
 function handlePointerMove(event) {
@@ -1223,16 +1247,23 @@ function init() {
   window.addEventListener('resize', resize);
   document.addEventListener('visibilitychange', () => {
     if (!audio.context || !audio.enabled) {
+      if (document.hidden) {
+        stopAnimation();
+      } else {
+        startAnimation();
+      }
       return;
     }
     if (document.hidden) {
       audio.context.suspend().catch(() => {});
+      stopAnimation();
     } else {
       audio.context.resume().catch(() => {});
+      startAnimation();
     }
   });
 
-  requestAnimationFrame(animate);
+  startAnimation();
 }
 
 init();

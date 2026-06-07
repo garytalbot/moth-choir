@@ -1,0 +1,562 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lumen Vault</title>
+  <meta name="description" content="A tiny ritual where clicks drop luminous seeds and particles carve ghostly pathways through a breathing dark field." />
+  <meta name="theme-color" content="#07070f" />
+  <style>
+    :root {
+      --bg: #05060d;
+      --panel: #0e0f19cc;
+      --ink: #f5f3ff;
+      --muted: #b9b7d8;
+      --line: #5b4cff;
+      --edge: #9cf;
+      --accent: #91f3ff;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      background: radial-gradient(circle at 20% 20%, #12152a 0%, #07070f 45%, #05060d 100%);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      overflow: hidden;
+    }
+    canvas {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 0;
+    }
+    .panel {
+      position: absolute;
+      z-index: 1;
+      top: 16px;
+      left: 16px;
+      width: min(460px, calc(100vw - 32px));
+      backdrop-filter: blur(8px);
+      background: linear-gradient(170deg, #0e1124cc, #0d1025b8);
+      border: 1px solid #ffffff1a;
+      border-radius: 14px;
+      box-shadow: 0 12px 30px #00000045;
+      padding: 14px;
+    }
+    h1 { margin: 0 0 8px 0; letter-spacing: .02em; font-size: 1.25rem; }
+    p { margin: 4px 0 12px; color: var(--muted); line-height: 1.45; }
+    .controls {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+    button {
+      border: 1px solid #ffffff2a;
+      background: #1a1d35;
+      color: var(--ink);
+      border-radius: 8px;
+      padding: 8px 10px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    button:hover { border-color: var(--accent); }
+    button.active { background: linear-gradient(120deg, #26316a, #151c47); }
+    .mini {
+      margin-top: 10px;
+      font-size: .88rem;
+      color: var(--muted);
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0,1fr));
+      gap: 6px 16px;
+    }
+    .mini div span { color: var(--ink); font-weight: 600; }
+    a {
+      display: inline-block;
+      margin-top: 8px;
+      color: var(--edge);
+      text-decoration: none;
+      border-bottom: 1px dashed #9cf8;
+      font-size: .92rem;
+    }
+    .hint {
+      margin-top: 8px;
+      font-size: .85rem;
+      color: #96a0f2;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="field" aria-hidden="true"></canvas>
+
+  <section class="panel" aria-label="Lumen Vault controls">
+    <h1>Lumen Vault</h1>
+    <p>
+      Click anywhere to plant a luminous seed. The dust wakes, bends, and decides whether it wants to orbit you,
+      the nearest seed, or the remembered hush of old motion.
+    </p>
+    <div class="controls">
+      <button id="seed">Add seed</button>
+      <button id="wind">Wind: off</button>
+      <button id="chaos">Chaos: off</button>
+      <button id="reset">New vault</button>
+      <button id="copy">Copy seed link</button>
+    </div>
+    <div class="mini">
+      <div>Seeds: <span id="seedCount">0</span></div>
+      <div>Particles: <span id="particleCount">0</span></div>
+      <div>Mood: <span id="mood">dormant</span></div>
+      <div>Seed: <span id="seedKey">lumen-0</span></div>
+    </div>
+    <a href="index.html">Return to Moth Choir</a>
+    <div class="hint">Keyboard shortcuts: <strong>A</strong> add seed, <strong>W</strong> wind, <strong>C</strong> chaos, <strong>R</strong> reset.</div>
+  </section>
+
+  <script>
+    const canvas = document.getElementById('field');
+    const ctx = canvas.getContext('2d');
+
+    const seedCountEl = document.getElementById('seedCount');
+    const particleCountEl = document.getElementById('particleCount');
+    const moodEl = document.getElementById('mood');
+    const seedKeyEl = document.getElementById('seedKey');
+
+    const ui = {
+      seed: document.getElementById('seed'),
+      wind: document.getElementById('wind'),
+      chaos: document.getElementById('chaos'),
+      reset: document.getElementById('reset'),
+      copy: document.getElementById('copy')
+    };
+
+    const state = {
+      w: 0,
+      h: 0,
+      time: 0,
+      seed: makeSeed(),
+      wind: false,
+      chaotic: false,
+      pointer: { x: 0, y: 0, active: false },
+      seeds: [],
+      particles: [],
+      paused: false,
+    };
+
+    const params = new URLSearchParams(location.search);
+    const hasSeed = params.get('seed');
+    if (hasSeed) {
+      state.seed = hasSeed;
+    }
+
+    function makeRng(seed) {
+      let t = hashSeed(seed);
+      return () => {
+        t += 0x6d2b79f5;
+        let n = Math.imul(t ^ (t >>> 15), 1 | t);
+        n ^= n + Math.imul(n ^ (n >>> 7), 61 | n);
+        return ((n ^ (n >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+
+    function hashSeed(input) {
+      let h = 2166136261;
+      for (let i = 0; i < input.length; i += 1) {
+        h ^= input.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+      }
+      return h >>> 0;
+    }
+
+    function makeSeed() {
+      return `lumen-${Math.floor(Math.random() * 1e9).toString(36)}`;
+    }
+
+    function resize() {
+      state.w = window.innerWidth;
+      state.h = window.innerHeight;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.floor(state.w * dpr);
+      canvas.height = Math.floor(state.h * dpr);
+      canvas.style.width = `${state.w}px`;
+      canvas.style.height = `${state.h}px`;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    function syncUrl() {
+      const url = new URL(location.href);
+      url.searchParams.set('seed', state.seed);
+      history.replaceState(null, '', url);
+      seedKeyEl.textContent = state.seed;
+    }
+
+    function addSeed(x, y, force = false) {
+      if (!force && state.seeds.length >= 12) {
+        state.seeds.shift();
+      }
+      state.seeds.push({
+        x,
+        y,
+        strength: 0.5 + Math.random() * 0.7,
+        phase: Math.random() * Math.PI * 2,
+        ttl: 420 + Math.random() * 260,
+      });
+    }
+
+    function seedFromCode(code) {
+      const [x, y, s] = code
+        .split('-')
+        .filter(Boolean)
+        .map((n) => Number.parseFloat(n));
+      if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(s)) {
+        return;
+      }
+      state.seeds.push({
+        x: (x % 1) * state.w,
+        y: (y % 1) * state.h,
+        strength: clamp(0.4 + (s % 10) / 10, 0.2, 0.9),
+        phase: s,
+        ttl: 999,
+      });
+      if (state.seeds.length > 12) {
+        state.seeds.shift();
+      }
+    }
+
+    function setupParticles(count, rng) {
+      state.particles = Array.from({ length: count }, () => ({
+        x: rng() * state.w,
+        y: rng() * state.h,
+        vx: 0,
+        vy: 0,
+        r: 0.8 + rng() * 2.2,
+        age: rng() * 1000,
+        life: 200 + rng() * 500,
+        hue: 190 + rng() * 90,
+      }));
+    }
+
+    function clamp(n, min, max) {
+      return Math.max(min, Math.min(max, n));
+    }
+
+    function update(dt) {
+      state.time += dt;
+      const windPhase = Math.sin(state.time * 0.0003);
+      const anchorX = state.pointer.active ? state.pointer.x : state.w * 0.5;
+      const anchorY = state.pointer.active ? state.pointer.y : state.h * 0.5;
+
+      for (const seed of state.seeds) {
+        seed.phase += dt * 0.0008 * (state.chaotic ? 2.0 : 1.0);
+        seed.ttl -= dt * 0.005;
+      }
+      state.seeds = state.seeds.filter((seed) => seed.ttl > 0);
+
+      if (state.seeds.length === 0 && state.time > 200) {
+        state.seeds.push({
+          x: state.w * 0.5,
+          y: state.h * 0.5,
+          strength: 0.55,
+          phase: 0,
+          ttl: 220,
+        });
+      }
+
+      for (const p of state.particles) {
+        p.age += dt * 0.001;
+        if (p.age > p.life) {
+          p.age = 0;
+          p.life = 200 + Math.random() * 700;
+          p.x = Math.random() * state.w;
+          p.y = Math.random() * state.h;
+          p.vx = p.vy = 0;
+        }
+
+        let ax = 0;
+        let ay = 0;
+        for (const seed of state.seeds) {
+          const dx = seed.x - p.x;
+          const dy = seed.y - p.y;
+          const d2 = dx * dx + dy * dy + 40;
+          const pull = seed.strength * (1400 / d2);
+          ax += (dx / Math.sqrt(d2)) * pull;
+          ay += (dy / Math.sqrt(d2)) * pull;
+        }
+
+        const px = p.x - anchorX;
+        const py = p.y - anchorY;
+        const pd2 = Math.sqrt(px * px + py * py) + 1;
+
+        if (state.w > 0 && state.h > 0) {
+          const orbitX = Math.cos(state.time * 0.00012 + p.hue) * 40;
+          const orbitY = Math.sin(state.time * 0.00011 + p.hue * 0.7) * 40;
+          ax += (orbitX - px) * 0.000001;
+          ay += (orbitY - py) * 0.000001;
+        }
+
+        if (state.chaotic) {
+          const noise = Math.sin((p.age + p.hue) * 0.9) * 0.7;
+          ax += Math.cos(noise + p.x * 0.001) * 0.04;
+          ay += Math.sin(noise + p.y * 0.001) * 0.04;
+        }
+
+        if (state.wind) {
+          ax += Math.cos(state.time * 0.0005 + p.phase + p.age) * 0.03 * (seedFactor());
+          ay += windPhase * 0.02 * (Math.sin(p.age + p.hue) + 1.5);
+        }
+
+        const anchorTone = Math.exp(-pd2 * 0.0004);
+        ax += (1 - anchorTone) * 0.005 * Math.sign(state.w - p.x);
+        ay += anchorTone * 0.004;
+
+        p.vx = (p.vx + ax * 0.9) * 0.94;
+        p.vy = (p.vy + ay * 0.9) * 0.94;
+        p.x += p.vx;
+        p.y += p.vy;
+
+        const wrap = 20;
+        if (p.x < -wrap) p.x = state.w + wrap;
+        if (p.x > state.w + wrap) p.x = -wrap;
+        if (p.y < -wrap) p.y = state.h + wrap;
+        if (p.y > state.h + wrap) p.y = -wrap;
+      }
+
+      const avg = state.particles.reduce((acc, p) => {
+        const dx = p.vx;
+        const dy = p.vy;
+        return acc + Math.sqrt(dx * dx + dy * dy);
+      }, 0) / Math.max(state.particles.length, 1);
+
+      moodEl.textContent = avg > 1.3 ? 'humming' : avg > 0.75 ? 'restless' : 'dormant';
+      seedCountEl.textContent = String(state.seeds.length);
+      particleCountEl.textContent = String(state.particles.length);
+      seedKeyEl.textContent = state.seed;
+    }
+
+    function seedFactor() {
+      if (!state.seeds.length) {
+        return 1;
+      }
+      return state.seeds.reduce((acc, seed) => acc + seed.strength, 0) / state.seeds.length;
+    }
+
+    function draw() {
+      const c = ctx;
+      c.clearRect(0, 0, state.w, state.h);
+      const grad = c.createRadialGradient(state.w * 0.35, state.h * 0.2, 20, state.w * 0.5, state.h * 0.5, Math.max(state.w, state.h));
+      grad.addColorStop(0, '#10142a');
+      grad.addColorStop(0.4, '#090b16');
+      grad.addColorStop(1, '#06060f');
+      c.fillStyle = grad;
+      c.fillRect(0, 0, state.w, state.h);
+
+      c.strokeStyle = '#3a45ff3d';
+      c.lineWidth = 1;
+      for (const seed of state.seeds) {
+        c.beginPath();
+        c.arc(seed.x, seed.y, 16 + seed.strength * 38 * (1 + 0.3 * Math.sin(seed.phase)), 0, Math.PI * 2);
+        c.stroke();
+      }
+
+      const sorted = [...state.particles].sort((a, b) => a.age - b.age);
+      for (let i = 0; i < sorted.length; i++) {
+        const p = sorted[i];
+        const n = sorted[(i + 1) % sorted.length];
+        c.strokeStyle = `hsla(${p.hue}, 90%, 70%, ${(0.14 + p.age * 0.0004).toFixed(3)})`;
+        c.beginPath();
+        c.moveTo(p.x, p.y);
+        c.lineTo(n.x, n.y);
+        c.stroke();
+      }
+
+      for (const p of state.particles) {
+        const alpha = 0.2 + ((Math.sin(p.hue + state.time * 0.0003) + 1) * 0.4);
+        const radius = p.r;
+        const hue = (p.hue + state.time * 0.01) % 360;
+        const grad = c.createRadialGradient(p.x, p.y, 0, p.x, p.y, radius * 8);
+        grad.addColorStop(0, `hsla(${hue}, 90%, 80%, ${Math.min(0.9, alpha + 0.1)})`);
+        grad.addColorStop(1, `hsla(${hue}, 90%, 65%, 0)`);
+        c.fillStyle = grad;
+        c.beginPath();
+        c.arc(p.x, p.y, radius * 8, 0, Math.PI * 2);
+        c.fill();
+      }
+
+      for (const s of state.seeds) {
+        c.fillStyle = '#94f3ff99';
+        c.beginPath();
+        c.arc(s.x, s.y, 3.2, 0, Math.PI * 2);
+        c.fill();
+      }
+
+      if (state.pointer.active) {
+        c.strokeStyle = '#d7f2ff66';
+        c.setLineDash([4, 6]);
+        c.beginPath();
+        c.arc(state.pointer.x, state.pointer.y, 28 + 8 * Math.sin(state.time * 0.003), 0, Math.PI * 2);
+        c.stroke();
+        c.setLineDash([]);
+      }
+
+      c.fillStyle = '#e8f0ff55';
+      c.font = '12px ui-monospace, SFMono-Regular, Menlo, monospace';
+      c.fillText(`seed:${state.seed}`, 12, state.h - 12);
+    }
+
+    let last = performance.now();
+    function frame(now) {
+      if (!state.paused) {
+        const dt = now - last;
+        update(dt);
+        draw();
+      }
+      last = now;
+      requestAnimationFrame(frame);
+    }
+
+    function parseShareSeed(raw) {
+      if (!raw) {
+        return;
+      }
+      const entries = raw.split(',').map((item) => item.trim()).filter(Boolean);
+      for (const item of entries) {
+        const [xRaw, yRaw, intensityRaw] = item.split(':');
+        const parsed = [Number.parseFloat(xRaw), Number.parseFloat(yRaw), Number.parseFloat(intensityRaw)];
+        if (parsed.every(Number.isFinite)) {
+          state.seeds.push({
+            x: (parsed[0] % 1) * state.w,
+            y: (parsed[1] % 1) * state.h,
+            strength: clamp(0.2 + (parsed[2] % 10) / 10, 0.2, 0.98),
+            phase: state.time * 0.001,
+            ttl: 999,
+          });
+        }
+      }
+    }
+
+    function installEvents() {
+      canvas.addEventListener('pointermove', (evt) => {
+        state.pointer.x = evt.clientX;
+        state.pointer.y = evt.clientY;
+      });
+
+      canvas.addEventListener('pointerdown', (evt) => {
+        state.pointer.active = true;
+        state.pointer.x = evt.clientX;
+        state.pointer.y = evt.clientY;
+        addSeed(evt.clientX, evt.clientY, true);
+        syncUrl();
+      });
+
+      canvas.addEventListener('pointerup', () => {
+        state.pointer.active = false;
+      });
+
+      ui.seed.addEventListener('click', () => {
+        addSeed(Math.random() * state.w, Math.random() * state.h, true);
+        syncUrl();
+      });
+
+      ui.wind.addEventListener('click', () => {
+        state.wind = !state.wind;
+        ui.wind.textContent = `Wind: ${state.wind ? 'on' : 'off'}`;
+        if (state.wind) {
+          ui.wind.classList.add('active');
+        } else {
+          ui.wind.classList.remove('active');
+        }
+      });
+
+      ui.chaos.addEventListener('click', () => {
+        state.chaotic = !state.chaotic;
+        ui.chaos.textContent = `Chaos: ${state.chaotic ? 'on' : 'off'}`;
+        if (state.chaotic) {
+          ui.chaos.classList.add('active');
+        } else {
+          ui.chaos.classList.remove('active');
+        }
+      });
+
+      ui.reset.addEventListener('click', () => {
+        state.seed = makeSeed();
+        const rng = makeRng(state.seed);
+        state.seeds = [];
+        for (let i = 0; i < 3; i++) {
+          addSeed(rng() * state.w, rng() * state.h, true);
+        }
+        setupParticles(240, rng);
+        syncUrl();
+      });
+
+      ui.copy.addEventListener('click', async () => {
+        const shareSeed = state.seed;
+        const shareUrl = `${location.pathname}?seed=${encodeURIComponent(shareSeed)}`;
+        try {
+          await navigator.clipboard.writeText(new URL(shareUrl, location.href).href);
+          ui.copy.textContent = 'Copied link';
+          setTimeout(() => {
+            ui.copy.textContent = 'Copy seed link';
+          }, 900);
+        } catch {
+          ui.copy.textContent = 'Copy failed';
+          setTimeout(() => {
+            ui.copy.textContent = 'Copy seed link';
+          }, 900);
+        }
+      });
+
+      window.addEventListener('keydown', (evt) => {
+        if (evt.key.toLowerCase() === 'a') {
+          ui.seed.click();
+        }
+        if (evt.key.toLowerCase() === 'w') {
+          ui.wind.click();
+        }
+        if (evt.key.toLowerCase() === 'c') {
+          ui.chaos.click();
+        }
+        if (evt.key.toLowerCase() === 'r') {
+          ui.reset.click();
+        }
+      });
+
+      window.addEventListener('blur', () => {
+        state.paused = true;
+      });
+      window.addEventListener('focus', () => {
+        state.paused = false;
+      });
+      window.addEventListener('resize', resize);
+    }
+
+    function seedFromHash() {
+      const raw = params.get('trace');
+      const code = params.get('code');
+      if (raw) {
+        parseShareSeed(decodeURIComponent(raw));
+      }
+      if (code) {
+        seedFromCode(code);
+      }
+    }
+
+    function init() {
+      resize();
+      const rng = makeRng(state.seed);
+      for (let i = 0; i < 4; i++) {
+        addSeed(rng() * state.w, rng() * state.h);
+      }
+      setupParticles(220, rng);
+      syncUrl();
+      installEvents();
+      seedFromHash();
+      last = performance.now();
+      requestAnimationFrame(frame);
+    }
+
+    init();
+  </script>
+</body>
+</html>

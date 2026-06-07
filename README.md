@@ -30,6 +30,7 @@ A subtle ambient hum can be started from a user gesture so the scene does not st
 - `lattice-liturgy.html`: click-to-spawn drift lattice with surging threads and entropy gestures.
 - `orbital-whisper.html`: summon star-beacons and orbiting glyphs in a whisper-field simulation.
 - `fractal-chorus.html`: inject pulses and watch a drifting membrane of particles braid into unstable sonic-like loops.
+- `lumen-vault.html`: drop luminous seeds and trace drifting ghost lines through a breathing particle field.
 
 ## Notes
 

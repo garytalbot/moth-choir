@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Void Harvest</title>
+  <meta name="description" content="A single-file generative toy where drifting lights seed constellation knots that echo your cursor like a nervous system.">
+  <meta name="theme-color" content="#08070d">
+  <meta name="robots" content="index,follow">
+  <meta property="og:title" content="Void Harvest">
+  <meta property="og:description" content="A single-file generative toy where drifting lights seed constellation knots that echo your cursor like a nervous system.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://garytalbot.github.io/moth-choir/void-harvest.html">
+  <meta property="og:image" content="https://garytalbot.github.io/moth-choir/assets/social-card.svg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Void Harvest">
+  <meta name="twitter:description" content="A single-file generative toy where drifting lights seed constellation knots that echo your cursor like a nervous system.">
+  <meta name="twitter:image" content="https://garytalbot.github.io/moth-choir/assets/social-card.svg">
+  <style>
+    :root {
+      --bg: #07070f;
+      --ink: #f0ece6;
+      --dim: rgba(240, 236, 230, 0.65);
+      --line: rgba(210, 192, 255, 0.35);
+      --pulse: #f7d9a0;
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      width: 100%;
+      background: radial-gradient(circle at 50% 50%, #111229 0%, #07070f 55%, #030308 100%);
+      color: var(--ink);
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      overflow: hidden;
+    }
+
+    canvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      image-rendering: crisp-edges;
+    }
+
+    .panel {
+      position: fixed;
+      left: 1rem;
+      top: 1rem;
+      right: 1rem;
+      z-index: 2;
+      width: min(46rem, calc(100vw - 2rem));
+      border: 1px solid rgba(255,255,255,0.16);
+      background: linear-gradient(180deg, rgba(18, 20, 34, 0.88), rgba(10, 11, 20, 0.86));
+      backdrop-filter: blur(18px);
+      border-radius: 18px;
+      padding: 1rem;
+      box-shadow: 0 28px 80px rgba(0,0,0,0.55);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.6rem, 4vw, 2.5rem);
+      letter-spacing: 0.03em;
+      text-wrap: balance;
+    }
+
+    p {
+      margin: .45rem 0 0;
+      max-width: 62ch;
+      color: var(--dim);
+      line-height: 1.45;
+      font-size: .95rem;
+    }
+
+    .controls {
+      margin-top: .85rem;
+      display: flex;
+      gap: .55rem;
+      flex-wrap: wrap;
+    }
+
+    .button {
+      border: 1px solid rgba(255,255,255,0.2);
+      color: var(--ink);
+      background: rgba(255,255,255,0.05);
+      border-radius: 999px;
+      padding: .5rem .95rem;
+      font-size: .84rem;
+      cursor: pointer;
+      appearance: none;
+    }
+
+    .button.active {
+      border-color: rgba(250, 220, 170, 0.65);
+      background: linear-gradient(180deg, rgba(247, 217, 160, 0.25), rgba(130, 99, 255, 0.18));
+    }
+
+    .status {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0,1fr));
+      margin-top: .8rem;
+      gap: .6rem;
+      color: var(--dim);
+      font-size: .85rem;
+    }
+
+    .chip {
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 12px;
+      padding: .45rem .65rem;
+      background: rgba(255,255,255,0.03);
+      display: flex;
+      justify-content: space-between;
+      gap: .5rem;
+    }
+
+    .chip strong {
+      color: #fff;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+    }
+
+    kbd { font: inherit; padding: .1rem .32rem; border-radius: .3rem; border: 1px solid rgba(255,255,255,0.22); background: rgba(255,255,255,0.08); }
+
+    @media (max-width: 720px) {
+      .panel { top: .75rem; left: .75rem; right: .75rem; border-radius: 14px; }
+      .status { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="sky"></canvas>
+  <div class="panel">
+    <h1>Void Harvest</h1>
+    <p>
+      Click to drop a seed. Move the pointer to wake a pulse wave, and the drifting lights
+      will braid around your traces like a nervous system. Space grows restless when you hold
+      <kbd>H</kbd> (harvest) or <kbd>C</kbd> (calm).
+    </p>
+    <div class="controls">
+      <button id="seed" class="button active">Seed</button>
+      <button id="mode" class="button">Pulse mode</button>
+      <button id="mute" class="button">Harvest line</button>
+      <button id="reset" class="button">Clear field</button>
+    </div>
+    <div class="status">
+      <div class="chip"><strong>Seeds</strong><span id="seedCount">0</span></div>
+      <div class="chip"><strong>Fireflies</strong><span id="particleCount">0</span></div>
+      <div class="chip"><strong>Mode</strong><span id="modeLabel">drift</span></div>
+      <div class="chip"><strong>Pulse</strong><span id="pulseLabel">off</span></div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('sky');
+    const ctx = canvas.getContext('2d');
+
+    const seedCountEl = document.getElementById('seedCount');
+    const particleCountEl = document.getElementById('particleCount');
+    const modeLabelEl = document.getElementById('modeLabel');
+    const pulseLabelEl = document.getElementById('pulseLabel');
+
+    const seedBtn = document.getElementById('seed');
+    const modeBtn = document.getElementById('mode');
+    const muteBtn = document.getElementById('mute');
+    const resetBtn = document.getElementById('reset');
+
+    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+
+    let w = 0;
+    let h = 0;
+    let t = 0;
+    let mode = 0;
+    let doPulse = false;
+    let pointer = {x: 0, y: 0, down: false, active:false};
+
+    const seeds = [];
+    const flies = [];
+
+    const rand = (a, b) => Math.random() * (b - a) + a;
+    const clamp = (n, a, b) => Math.min(Math.max(n, a), b);
+
+    function resize() {
+      w = window.innerWidth;
+      h = window.innerHeight;
+      canvas.width = Math.floor(w * dpr);
+      canvas.height = Math.floor(h * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    function addSeed(x = w / 2, y = h / 2) {
+      const seed = {
+        x,
+        y,
+        radius: rand(38, 82),
+        age: rand(0, 600),
+        spin: rand(-0.004, 0.004),
+        hue: rand(40, 230),
+      };
+      seeds.push(seed);
+      for (let i = 0; i < 14; i++) spawnFly(x + rand(-20, 20), y + rand(-20, 20), seed);
+    }
+
+    function spawnFly(x, y, anchor) {
+      flies.push({
+        x,
+        y,
+        vx: rand(-0.4, 0.4),
+        vy: rand(-0.4, 0.4),
+        life: 300 + Math.random() * 520,
+        glow: rand(0.15, 1),
+        anchor: anchor || null,
+        phase: Math.random() * Math.PI * 2,
+        orbit: rand(8, 72),
+        tone: Math.random(),
+      });
+    }
+
+    function seedAt(x, y) {
+      addSeed(x, y);
+      refreshUI();
+    }
+
+    function refreshUI() {
+      seedCountEl.textContent = seeds.length;
+      particleCountEl.textContent = flies.length;
+      modeLabelEl.textContent = mode ? 'pulse' : 'drift';
+      pulseLabelEl.textContent = doPulse ? 'on' : 'off';
+    }
+
+    function attract(ax, ay, bx, by, force) {
+      const dx = ax - bx;
+      const dy = ay - by;
+      const d = Math.hypot(dx, dy) || 0.0001;
+      return {x: (dx / d) * force, y: (dy / d) * force, d};
+    }
+
+    function step() {
+      t += 1;
+      ctx.clearRect(0, 0, w, h);
+
+      // void ambiance
+      ctx.fillStyle = '#07070f';
+      ctx.fillRect(0, 0, w, h);
+
+      // soft grain
+      ctx.fillStyle = 'rgba(255,255,255,0.03)';
+      for (let i = 0; i < 130; i++) {
+        const gx = (i * 37.1) % w;
+        const gy = (i * 73.7) % h;
+        if (((i * t) % 19) < 1) {
+          ctx.fillRect(gx, gy, 1, 1);
+        }
+      }
+
+      // seeds
+      for (let s of seeds) {
+        s.age += 1;
+        s.hue = (s.hue + s.spin * 12) % 360;
+        const drift = Math.sin((t + s.age) * 0.003 + s.hue * 0.02) * 0.4;
+        s.radius = clamp(s.radius + drift, 34, 112);
+
+        const hue = (s.hue + 25) % 360;
+        const grad = ctx.createRadialGradient(s.x, s.y, 1, s.x, s.y, s.radius * 1.1);
+        grad.addColorStop(0, `hsla(${hue},70%,65%,0.22)`);
+        grad.addColorStop(1, `hsla(${hue + 50},70%,50%,0.01)`);
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // pulses
+      if (pointer.down && doPulse) {
+        const ring = (Math.sin(t * 0.06) * 0.5 + 0.5) * Math.min(w, h) * 0.08 + 45;
+        ctx.strokeStyle = 'rgba(248, 216, 138, 0.17)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(pointer.x, pointer.y, ring, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // particles
+      for (let i = flies.length - 1; i >= 0; i--) {
+        const f = flies[i];
+        f.life -= 1;
+        if (f.life <= 0) { flies.splice(i,1); continue; }
+
+        let ax = 0, ay = 0;
+
+        const target = pointer.active ? pointer : {x: w * 0.5, y: h * 0.5};
+        const cursor = attract(target.x, target.y, f.x, f.y, 0.12);
+        ax += cursor.x; ay += cursor.y;
+
+        if (mode) {
+          // pulse mode: seek closest seed aggressively
+          let best;
+          for (const s of seeds) {
+            const pull = attract(s.x, s.y, f.x, f.y, 0.14);
+            if (!best || pull.d < best.d) best = pull;
+            if (pull.d < s.radius) {
+              ax += pull.x * 0.8;
+              ay += pull.y * 0.8;
+            }
+          }
+        } else {
+          // drift mode: gentle weave
+          if (seeds[0]) {
+            const s = seeds[f.phase % seeds.length | 0];
+            const pull = attract(s.x, s.y, f.x, f.y, 0.06);
+            ax += pull.x * 0.24;
+            ay += pull.y * 0.24;
+          }
+        }
+
+        f.vx += ax * 0.004;
+        f.vy += ay * 0.004;
+        f.vx *= 0.985;
+        f.vy *= 0.985;
+
+        // weaving oscillation
+        f.phase += 0.03 + f.tone * 0.013;
+        f.vx += Math.cos(f.phase + t * 0.004 + f.tone * 4) * 0.08 * (mode ? 0.8 : 0.4);
+        f.vy += Math.sin(f.phase + t * 0.004 + f.tone * 4) * 0.08 * (mode ? 0.8 : 0.4);
+
+        f.x += f.vx;
+        f.y += f.vy;
+
+        f.x = (f.x + w) % w;
+        f.y = (f.y + h) % h;
+
+        const speed = Math.min(1, Math.hypot(f.vx, f.vy));
+        const alpha = clamp(0.18 + speed * 0.32 + f.glow, 0, 1);
+        const size = 1.4 + speed * 2.2;
+        const hue = 20 + f.tone * 340;
+
+        // line glow
+        const glow = Math.sin((f.phase + f.x * 0.002 + f.y * 0.002)) * 0.5 + 0.5;
+        if (glow > 0.75) {
+          const linked = seeds[Math.floor(f.tone * seeds.length) % Math.max(1, seeds.length)];
+          if (linked) {
+            ctx.strokeStyle = `rgba(255, 228, 175, ${0.05 + 0.18 * glow})`;
+            ctx.lineWidth = 0.7;
+            ctx.beginPath();
+            ctx.moveTo(f.x, f.y);
+            ctx.lineTo(linked.x, linked.y);
+            ctx.stroke();
+          }
+        }
+
+        ctx.fillStyle = `hsla(${hue}, 82%, ${60 + 20 * f.glow}%, ${alpha})`;
+        ctx.beginPath();
+        ctx.ellipse(f.x, f.y, size, size * 0.7, f.phase, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // occasional new fireflies from random seed
+      if (seeds.length > 0 && t % 4 === 0 && Math.random() < 0.7) {
+        const s = seeds[Math.floor(Math.random() * seeds.length)];
+        const angle = Math.random() * Math.PI * 2;
+        spawnFly(s.x + Math.cos(angle) * rand(-8, 8), s.y + Math.sin(angle) * rand(-8, 8), s);
+      }
+
+      refreshUI();
+      requestAnimationFrame(step);
+    }
+
+    function pointerMove(e) {
+      const r = e.touches && e.touches[0] ? e.touches[0] : e;
+      pointer.x = r.clientX;
+      pointer.y = r.clientY;
+      pointer.active = true;
+    }
+
+    function startPulse(e) {
+      pointerMove(e);
+      pointer.down = true;
+      seedAt(pointer.x, pointer.y);
+    }
+
+    function endPulse() {
+      pointer.down = false;
+    }
+
+    window.addEventListener('resize', resize);
+    window.addEventListener('mousemove', pointerMove);
+    window.addEventListener('touchmove', pointerMove, {passive: true});
+    window.addEventListener('mousedown', startPulse);
+    window.addEventListener('touchstart', startPulse, {passive: true});
+    window.addEventListener('mouseup', endPulse);
+    window.addEventListener('mouseleave', () => pointer.active = false);
+    window.addEventListener('touchend', () => pointer.active = false);
+
+    seedBtn.addEventListener('click', () => {
+      seedBtn.classList.toggle('active');
+      if (seedBtn.classList.contains('active')) {
+        seedAt(w * 0.5, h * 0.5);
+      }
+    });
+
+    modeBtn.addEventListener('click', () => {
+      mode = (mode + 1) % 2;
+      refreshUI();
+    });
+
+    muteBtn.addEventListener('click', () => {
+      doPulse = !doPulse;
+      muteBtn.textContent = doPulse ? 'Hold line' : 'Harvest line';
+      refreshUI();
+    });
+
+    resetBtn.addEventListener('click', () => {
+      seeds.length = 0;
+      flies.length = 0;
+      for (let i = 0; i < 4; i++) {
+        addSeed(rand(w * 0.2, w * 0.8), rand(h * 0.2, h * 0.8));
+      }
+      refreshUI();
+    });
+
+    document.addEventListener('keydown', (ev) => {
+      if (ev.key.toLowerCase() === 'c') {
+        mode = (mode + 1) % 2;
+        refreshUI();
+      }
+      if (ev.key.toLowerCase() === 'h') {
+        doPulse = !doPulse;
+        muteBtn.textContent = doPulse ? 'Hold line' : 'Harvest line';
+        refreshUI();
+      }
+      if (ev.key.toLowerCase() === 'r') {
+        resetBtn.click();
+      }
+    });
+
+    for (let i = 0; i < 6; i++) {
+      addSeed(rand(w * 0.2, w * 0.8), rand(h * 0.2, h * 0.8));
+    }
+
+    resize();
+    refreshUI();
+    requestAnimationFrame(step);
+  </script>
+</body>
+</html>

@@ -36,6 +36,7 @@
         <button class="button" data-action="scatter">Scatter</button>
         <button class="button" data-action="dim">Dim stage</button>
         <button class="button" data-action="moon">Shift moon</button>
+        <button class="button" data-action="conduct" aria-pressed="false">Conduct</button>
         <button class="button" data-action="hum" aria-pressed="false">Wake hum</button>
         <button class="button" data-action="copy">Copy scene link</button>
         <button class="button" data-action="postcard">Save postcard</button>
@@ -45,7 +46,8 @@
         <span>Click anywhere to place a lamp.</span>
         <span>Move the mouse to become the brightest thing in the room.</span>
         <span>Click or tap Wake hum to start the ambient layer.</span>
-        <span>Keys: <kbd>D</kbd> dim, <kbd>S</kbd> scatter, <kbd>L</kbd> lamp, <kbd>M</kbd> moon, <kbd>H</kbd> hum, <kbd>P</kbd> postcard, <kbd>R</kbd> reset.</span>
+        <span>Hold Conduct and drag to draw a temporary light-score the moths will follow.</span>
+        <span>Keys: <kbd>D</kbd> dim, <kbd>S</kbd> scatter, <kbd>L</kbd> lamp, <kbd>M</kbd> moon, <kbd>C</kbd> conduct, <kbd>H</kbd> hum, <kbd>P</kbd> postcard, <kbd>R</kbd> reset.</span>
         <span>The postcard exports the current night as an SVG and can jump into the share sheet when the browser allows it.</span>
       </div>
     </header>
@@ -73,6 +75,10 @@
           <span>choir hum</span>
         </div>
         <div class="stat">
+          <strong id="performance-mode">still</strong>
+          <span>performance mode</span>
+        </div>
+        <div class="stat">
           <strong id="pulse-value">0%</strong>
           <span>room pulse</span>
         </div>
@@ -88,6 +94,28 @@
       <div class="eyebrow">Current hymn</div>
       <p id="verse">The room is waking in brass and shadow.</p>
       <div class="mini-note" id="mini-note">The moths have not decided whether you are a candle or a weather event.</div>
+    </section>
+
+    <section class="panel siblings" aria-label="Sibling rituals">
+      <div class="eyebrow">Sibling rituals</div>
+      <div class="siblings-grid">
+        <a class="source-link" href="strange-computational-art.html">
+          <strong>Open Strange Computational Art</strong>
+          <span>Attractor field, orbital sweep controls, and glow-trail geometry.</span>
+        </a>
+        <a class="source-link" href="noise-lullaby.html">
+          <strong>Open Noise Lullaby</strong>
+          <span>Noise field, pulse rings, and a breathing static ecosystem.</span>
+        </a>
+        <a class="source-link" href="moth-sky-oracle.html">
+          <strong>Open Sky Oracle</strong>
+          <span>Drop beacons and watch glowing flock trails braid into impossible constellations.</span>
+        </a>
+        <a class="source-link" href="lattice-liturgy.html">
+          <strong>Open Lattice Liturgy</strong>
+          <span>Spawn a ritual lattice of drifting nodes, surging threads, and entropy pulses.</span>
+        </a>
+      </div>
     </section>
   </main>
 

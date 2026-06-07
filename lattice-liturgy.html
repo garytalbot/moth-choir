@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lattice Liturgy</title>
+  <meta name="description" content="A generative ritual of drifting points, trembling threads, and entropy chords." />
+  <meta name="theme-color" content="#070711" />
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+  <style>
+    :root {
+      --bg: #04050b;
+      --ink: #f8f4ef;
+      --line: rgba(255, 255, 255, 0.22);
+      --gold: #efc97a;
+      --violet: #9ea8ff;
+      --ember: #ffb07a;
+      --panel: rgba(12, 14, 22, 0.87);
+      --soft: rgba(255, 245, 225, 0.9);
+    }
+
+    * { box-sizing: border-box; }
+    html,
+    body { margin: 0; width: 100%; height: 100%; }
+    body {
+      min-height: 100%;
+      background: radial-gradient(circle at 25% 15%, #12142f 0%, transparent 35%),
+        radial-gradient(circle at 82% 80%, #24131b 0%, transparent 33%),
+        linear-gradient(180deg, #04050b 0%, #05060d 60%, #010103 100%);
+      color: var(--ink);
+      font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+      overflow: hidden;
+    }
+
+    #altar {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      touch-action: none;
+    }
+
+    .hud {
+      position: fixed;
+      inset: 0 auto auto 0;
+      padding: 1rem;
+      display: grid;
+      gap: 0.7rem;
+      z-index: 2;
+      width: min(470px, 92vw);
+      pointer-events: none;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 0.9rem 1rem;
+      box-shadow: 0 24px 80px rgba(0,0,0,.42);
+      backdrop-filter: blur(10px);
+    }
+    .kicker {
+      color: var(--gold);
+      letter-spacing: .26em;
+      text-transform: uppercase;
+      font-size: .72rem;
+    }
+    h1 { margin: .2rem 0; font-size: clamp(1.6rem, 3vw, 2.4rem); }
+    p { margin: 0; color: var(--soft); line-height: 1.45; }
+
+    .controls {
+      margin-top: .65rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: .45rem;
+      pointer-events: auto;
+    }
+    button {
+      border: 1px solid rgba(255,255,255,.2);
+      border-radius: 999px;
+      background: rgba(255,255,255,0.06);
+      color: var(--ink);
+      font: inherit;
+      padding: .54rem .85rem;
+      cursor: pointer;
+    }
+    button:hover, button:focus-visible {
+      background: rgba(255,255,255,0.13);
+      border-color: rgba(255,255,255,.35);
+      outline: none;
+    }
+    .status {
+      margin-top: .55rem;
+      font-size: .92rem;
+      color: #d4cdd6;
+      display: grid;
+      gap: .2rem;
+    }
+    a.return {
+      color: #fef7ec;
+      text-decoration: none;
+      display: inline-block;
+      margin-top: .5rem;
+      pointer-events: auto;
+      border-bottom: 1px solid rgba(255,255,255,.3);
+    }
+    a.return:hover { border-color: rgba(255,255,255,.65); }
+
+    .seedline {
+      user-select: all;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+      opacity: .85;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="altar"></canvas>
+
+  <aside class="hud">
+    <div class="card">
+      <div class="kicker">Ritual interface</div>
+      <h1>Lattice Liturgy</h1>
+      <p>
+        Tap/click the dark. Nodes appear, weave, fray, and reconnect through a noise field.
+        Use controls to seed a new storm or to let the web cool.
+      </p>
+      <div class="controls">
+        <button data-cmd="reseed">Re-seed</button>
+        <button data-cmd="pause">Pause</button>
+        <button data-cmd="wind">Surge</button>
+        <button data-cmd="clean">Clear</button>
+        <button data-cmd="copy">Copy seed</button>
+      </div>
+      <div class="status">
+        <div id="stats">nodes 0 · threads 0 · tension 0%</div>
+        <div id="seedline" class="seedline"></div>
+      </div>
+      <a class="return" href="index.html">Return to the Moth Choir home</a>
+    </div>
+  </aside>
+
+  <script>
+    const canvas = document.getElementById('altar');
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+
+    const params = new URLSearchParams(location.search);
+    const seedText = params.get('seed') || crypto.randomUUID();
+    let running = true;
+    let surge = 0;
+
+    const seedHash = xmur3(seedText);
+    let rand = xorshift(seedHash());
+
+    const nodes = [];
+    const links = [];
+
+    function xmur3(str) {
+      for (var i = 0, h = 1779033703 ^ str.length; i < str.length; i++) {
+        h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+        h = h << 13 | h >>> 19;
+      }
+      return function() {
+        h = Math.imul(h ^ (h >>> 16), 2246822507);
+        h = Math.imul(h ^ (h >>> 13), 3266489909);
+        return (h ^= h >>> 16) >>> 0;
+      };
+    }
+
+    function xorshift(seed) {
+      let x = seed >>> 0;
+      return function() {
+        x ^= x << 13;
+        x ^= x >>> 17;
+        x ^= x << 5;
+        return ((x >>> 0) / 0x100000000);
+      };
+    }
+
+    const palette = {
+      a: 'rgba(255, 238, 178, 0.95)',
+      b: 'rgba(198, 168, 255, 0.9)',
+      c: 'rgba(255, 183, 136, 0.9)',
+      bg: 'rgba(8, 9, 16, 0.28)'
+    };
+
+    function resize() {
+      canvas.width = Math.floor(innerWidth * dpr);
+      canvas.height = Math.floor(innerHeight * dpr);
+      canvas.style.width = innerWidth + 'px';
+      canvas.style.height = innerHeight + 'px';
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+    }
+    addEventListener('resize', resize);
+    resize();
+
+    function addNode(x, y) {
+      const phase = rand() * Math.PI * 2;
+      nodes.push({
+        x,
+        y,
+        vx: (rand() - 0.5) * 0.2,
+        vy: (rand() - 0.5) * 0.2,
+        mass: 0.35 + rand() * 0.95,
+        age: Math.floor(rand() * 1600),
+        phase,
+      });
+    }
+
+    function seed(nodesCount = 18) {
+      nodes.length = 0;
+      links.length = 0;
+      for (let i = 0; i < nodesCount; i++) {
+        addNode(rand() * innerWidth, rand() * innerHeight);
+      }
+      for (let i = 0; i < nodesCount * 1.2; i++) {
+        const a = nodes[(rand() * nodes.length) | 0];
+        const b = nodes[(rand() * nodes.length) | 0];
+        if (a !== b) {
+          links.push({a, b, strength: 0.16 + rand() * 0.7, lifetime: 600 + (rand() * 1200) | 0});
+        }
+      }
+      updateURL();
+    }
+
+    function wrapIndex(n) {
+      return ((n % nodes.length) + nodes.length) % nodes.length;
+    }
+
+    function updateLinks(delta) {
+      // age links; kill dead
+      for (let i = links.length - 1; i >= 0; i--) {
+        links[i].lifetime -= delta * 0.7;
+        if (links[i].lifetime <= 0) links.splice(i, 1);
+      }
+      while (links.length < nodes.length * 0.9) {
+        const a = nodes[(rand() * nodes.length) | 0];
+        const b = nodes[(rand() * nodes.length) | 0];
+        if (a !== b) links.push({a, b, strength: 0.16 + rand() * 0.7, lifetime: 420 + (rand() * 1400) | 0});
+      }
+    }
+
+    const noise = (t) => {
+      return Math.sin(t) * 0.5 + Math.sin(t * 0.27) * 0.35 + Math.sin(t * 0.11) * 0.15;
+    };
+
+    function step(dt, t) {
+      const cx = innerWidth / 2;
+      const cy = innerHeight / 2;
+      const m = nodes.length;
+      for (let i = 0; i < m; i++) {
+        const n = nodes[i];
+        const pullX = (cx - n.x) * 0.00003 * n.mass;
+        const pullY = (cy - n.y) * 0.00003 * n.mass;
+        const wave = noise((t * 0.00035) + i * 0.2) * 0.003;
+        n.vx += pullX + Math.cos(t * 0.0003 + n.phase) * wave;
+        n.vy += pullY + Math.sin(t * 0.00027 + n.phase) * (wave * 1.2);
+
+        // pairwise soft pull from neighbors through links
+        for (let j = 0; j < links.length; j++) {
+          const ln = links[j];
+          if (ln.a === n || ln.b === n) {
+            const o = ln.a === n ? ln.b : ln.a;
+            const dx = o.x - n.x;
+            const dy = o.y - n.y;
+            const dist = Math.hypot(dx, dy) || 1;
+            const target = 140 + (Math.sin(t * 0.0002 + ln.strength * 10) * 45);
+            const force = Math.max(-0.05, Math.min(0.05, (target - dist) * 0.00003 * ln.strength));
+            n.vx += (dx / dist) * force;
+            n.vy += (dy / dist) * force;
+          }
+        }
+
+        // little random entropy
+        n.vx += (rand() - 0.5) * 0.004;
+        n.vy += (rand() - 0.5) * 0.004;
+
+        const surgeScale = 1 + surge * 0.06;
+        n.vx *= 0.985;
+        n.vy *= 0.985;
+        n.vx += (Math.cos(t * 0.0002 + n.phase) * 0.0005) * surgeScale;
+        n.vy += (Math.sin(t * 0.0002 + n.phase) * 0.0005) * surgeScale;
+
+        n.x = (n.x + n.vx * dt) % innerWidth;
+        n.y = (n.y + n.vy * dt) % innerHeight;
+        if (n.x < 0) n.x += innerWidth;
+        if (n.y < 0) n.y += innerHeight;
+        if (n.age > 99999) n.age = 0;
+        n.age += 1;
+        if (n.x < 0 || n.x > innerWidth) n.vx *= -0.76;
+        if (n.y < 0 || n.y > innerHeight) n.vy *= -0.76;
+      }
+    }
+
+    function draw(t) {
+      ctx.fillStyle = palette.bg;
+      ctx.fillRect(0,0,innerWidth,innerHeight);
+
+      // links
+      for (const ln of links) {
+        const a = ln.a;
+        const b = ln.b;
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const dist = Math.hypot(dx, dy) || 1;
+        const alpha = Math.max(0, 1 - dist / 380);
+        const c = alpha * 0.26;
+        const hue = (dist * 0.12 + t * 0.02 + (a.phase + b.phase) * 40) % 360;
+        ctx.strokeStyle = `hsla(${hue}, 40%, 70%, ${c})`;
+        ctx.lineWidth = 0.8 + alpha * 1.3;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      }
+
+      // points
+      for (const n of nodes) {
+        const agePulse = 0.4 + Math.sin(t * 0.006 + n.age * 0.01 + n.phase) * 0.4;
+        const r = 1.4 + agePulse * 1.2 + n.mass;
+        const lum = 45 + (n.age % 120) * 0.45;
+        ctx.beginPath();
+        const col = `hsla(${210 + Math.sin(n.phase + t*0.001)*50}, 65%, ${lum}%, ${0.3 + agePulse * 0.45})`;
+        ctx.fillStyle = col;
+        ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // subtle vignette
+      const grad = ctx.createRadialGradient(innerWidth * 0.5, innerHeight * 0.5, 30, innerWidth * 0.5, innerHeight * 0.5, Math.max(innerWidth, innerHeight));
+      grad.addColorStop(0, 'rgba(0,0,0,0)');
+      grad.addColorStop(1, 'rgba(0,0,0,0.36)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0,0,innerWidth,innerHeight);
+
+      updateStatus();
+    }
+
+    let last = 0;
+    function loop(ms) {
+      if (surge > 0) surge -= 0.15;
+      const dt = Math.min(4, (ms - last) || 16);
+      if (running) {
+        step(dt, ms);
+        updateLinks(dt);
+        draw(ms);
+      }
+      last = ms;
+      requestAnimationFrame(loop);
+    }
+
+    function updateURL() {
+      if (history && history.replaceState) {
+        const params = new URLSearchParams({ seed: seedText });
+        history.replaceState(null, '', `?${params.toString()}`);
+      }
+      document.getElementById('seedline').textContent = `seed=${seedText}`;
+    }
+
+    function updateStatus() {
+      const tension = Math.min(99, Math.max(0, Math.round((surge / 20) * 100)));
+      document.getElementById('stats').textContent = `nodes ${nodes.length} · threads ${links.length} · tension ${tension}%`;
+    }
+
+    function reseed() {
+      for (let i = 0; i < nodes.length; i++) {
+        nodes[i].x = rand() * innerWidth;
+        nodes[i].y = rand() * innerHeight;
+      }
+      links.length = 0;
+      updateLinks(0);
+    }
+
+    function surgeNow() {
+      surge = 20;
+      for (let i = 0; i < nodes.length; i++) {
+        nodes[i].vx += (rand() - 0.5) * 1.2;
+        nodes[i].vy += (rand() - 0.5) * 1.2;
+      }
+    }
+
+    function clearAll() {
+      nodes.length = 0;
+      links.length = 0;
+    }
+
+    document.querySelectorAll('[data-cmd]').forEach((btn) => {
+      btn.addEventListener('click', (ev) => {
+        const cmd = ev.currentTarget.dataset.cmd;
+        if (cmd === 'pause') {
+          running = !running;
+          ev.currentTarget.textContent = running ? 'Pause' : 'Resume';
+        } else if (cmd === 'wind') {
+          surgeNow();
+          ev.currentTarget.textContent = 'Surge';
+        } else if (cmd === 'reseed') {
+          reseed();
+        } else if (cmd === 'clean') {
+          clearAll();
+          seed(16);
+        } else if (cmd === 'copy') {
+          navigator.clipboard.writeText(location.href).then(() => {
+            btn.textContent = 'Seed copied';
+            setTimeout(() => btn.textContent = 'Copy seed', 900);
+          }).catch(() => {
+            btn.textContent = 'Clipboard blocked';
+          });
+        }
+      });
+    });
+
+    function pointer(x, y) {
+      for (let i = 0; i < 6; i++) {
+        addNode(
+          x + (rand() - 0.5) * 42,
+          y + (rand() - 0.5) * 42
+        );
+      }
+      for (let i = 0; i < 10; i++) {
+        const a = nodes[(rand() * nodes.length) | 0];
+        const b = nodes[(rand() * nodes.length) | 0];
+        if (a && b && a !== b) {
+          links.push({a, b, strength: rand() * 0.9, lifetime: 200 + (rand() * 2000 | 0)});
+        }
+      }
+    }
+
+    addEventListener('pointerdown', (ev) => {
+      pointer(ev.clientX, ev.clientY);
+    });
+
+    addEventListener('keydown', (ev) => {
+      if (ev.key.toLowerCase() === 'c') clearAll(), reseed();
+      if (ev.key.toLowerCase() === 'r') reseed();
+      if (ev.key.toLowerCase() === 'p') {
+        updateURL();
+        navigator.clipboard.writeText(location.href);
+      }
+      if (ev.key.toLowerCase() === 's') seed(10);
+      if (ev.key.toLowerCase() === ' ') {
+        running = !running;
+        const btn = document.querySelector('[data-cmd="pause"]');
+        btn.textContent = running ? 'Pause' : 'Resume';
+      }
+      if (ev.key.toLowerCase() === 'w') surgeNow();
+    });
+
+    seed(18);
+    requestAnimationFrame(loop);
+    updateURL();
+  </script>
+</body>
+</html>

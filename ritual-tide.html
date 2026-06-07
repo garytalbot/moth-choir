@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ritual Tide</title>
+  <meta name="description" content="Ritual Tide is a self-contained generative sketch where cursor-beacons bend particle storms into strange tides of light.">
+  <meta name="theme-color" content="#070814">
+  <meta name="robots" content="index,follow">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Ritual Tide">
+  <meta property="og:description" content="A generative tide where particles orbit, drift, and pulse around attractor beacons.">
+  <meta property="og:url" content="https://garytalbot.github.io/moth-choir/ritual-tide.html">
+  <meta property="og:image" content="https://garytalbot.github.io/moth-choir/assets/social-card.svg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Ritual Tide">
+  <meta name="twitter:description" content="A generative tide where particles orbit, drift, and pulse around attractor beacons.">
+  <meta name="twitter:image" content="https://garytalbot.github.io/moth-choir/assets/social-card.svg">
+  <style>
+    :root {
+      --ink: #f3ecff;
+      --muted: rgba(243, 236, 255, 0.74);
+      --panel: rgba(12, 15, 27, 0.88);
+      --line: rgba(197, 179, 255, 0.35);
+      --glow: rgba(251, 214, 124, 0.65);
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      width: 100%;
+      min-height: 100%;
+      background: radial-gradient(circle at 50% 50%, #0e1030 0%, #060710 55%, #04040a 100%);
+      color: var(--ink);
+      overflow: hidden;
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+
+    canvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      image-rendering: pixelated;
+      display: block;
+      filter: contrast(115%) saturate(115%);
+    }
+
+    .hud {
+      position: fixed;
+      left: 1rem;
+      top: 1rem;
+      right: 1rem;
+      width: min(42rem, calc(100vw - 2rem));
+      z-index: 3;
+      border: 1px solid rgba(255,255,255,0.16);
+      border-radius: 14px;
+      padding: .8rem 1rem;
+      background: var(--panel);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 20px 60px rgba(0,0,0,.4);
+    }
+
+    .hud h1 {
+      margin: 0;
+      font-size: clamp(1.2rem, 3vw, 1.8rem);
+      letter-spacing: 0.03em;
+      text-wrap: balance;
+    }
+
+    .hud p {
+      margin: .45rem 0 0;
+      max-width: 62ch;
+      color: var(--muted);
+      font-size: .9rem;
+      line-height: 1.35;
+    }
+
+    .buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .5rem;
+      margin-top: .72rem;
+    }
+
+    button {
+      border: 1px solid rgba(255,255,255,0.22);
+      background: rgba(255,255,255,0.05);
+      color: var(--ink);
+      border-radius: 999px;
+      padding: .48rem .85rem;
+      font-size: .86rem;
+      cursor: pointer;
+      transition: transform .16s ease, border-color .2s;
+    }
+
+    button:hover { transform: translateY(-1px); }
+    button.active { border-color: rgba(251,214,124,.85); box-shadow: 0 0 0 1px rgba(251,214,124,.24) inset; }
+
+    .stats {
+      margin-top: .85rem;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: .6rem;
+      font-size: .8rem;
+    }
+
+    .chip {
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 11px;
+      padding: .45rem .6rem;
+      background: rgba(255,255,255,0.03);
+      display: flex;
+      justify-content: space-between;
+      gap: .5rem;
+      color: var(--muted);
+    }
+
+    .chip strong {
+      color: #fff;
+      font-weight: 650;
+      letter-spacing: .04em;
+    }
+
+    .home {
+      margin-top: .65rem;
+      display: inline-block;
+      color: #fff;
+      text-decoration: none;
+      border-bottom: 1px solid rgba(255,255,255,0.2);
+      font-size: .87rem;
+    }
+
+    .legend { margin-top: .62rem; color: rgba(255,255,255,0.72); font-size: .8rem; line-height: 1.4; }
+    .legend kbd { font: inherit; padding: .02rem .28rem; border-radius: .24rem; border: 1px solid rgba(255,255,255,0.22); background: rgba(255,255,255,0.07); }
+
+    @media (max-width: 700px) {
+      .stats { grid-template-columns: repeat(2, minmax(0,1fr)); }
+      .hud {
+        border-radius: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="field"></canvas>
+
+  <div class="hud">
+    <h1>Ritual Tide</h1>
+    <p>
+      Click or touch to set beacons. Particles bend toward the nearest beacons, then drift away when the tide grows loud.
+      The motion is deterministic by seed, and you can export the current moment when the tide looks right.
+    </p>
+
+    <div class="buttons" role="group" aria-label="Controls">
+      <button id="togglePulse" class="active" aria-pressed="true">Pulse: on</button>
+      <button id="toggleChaos">Chaos: 12</button>
+      <button id="randomize">Re-seed now</button>
+      <button id="clear">Clear beacons</button>
+      <button id="pause">Pause</button>
+      <button id="save">Save frame</button>
+      <button id="copy">Copy scene state</button>
+    </div>
+
+    <div class="legend">
+      Controls: <kbd>Space</kbd> pause, <kbd>R</kbd> reseed, <kbd>C</kbd> clear, <kbd>B</kbd> add random beacon,
+      <kbd>P</kbd> pulse toggle, <kbd>S</kbd> save.
+    </div>
+
+    <div class="stats" aria-live="polite">
+      <div class="chip"><strong>Beacons</strong><span id="beaconCount">0</span></div>
+      <div class="chip"><strong>Particles</strong><span id="particleCount">0</span></div>
+      <div class="chip"><strong>Mode</strong><span id="modeLabel">calm</span></div>
+      <div class="chip"><strong>Seed</strong><span id="seedLabel">000000</span></div>
+    </div>
+
+    <a href="./" class="home">← Back to Moth Choir home</a>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('field');
+    const ctx = canvas.getContext('2d');
+
+    const beaconCountEl = document.getElementById('beaconCount');
+    const particleCountEl = document.getElementById('particleCount');
+    const modeLabelEl = document.getElementById('modeLabel');
+    const seedLabelEl = document.getElementById('seedLabel');
+    const togglePulse = document.getElementById('togglePulse');
+    const toggleChaos = document.getElementById('toggleChaos');
+    const randomizeBtn = document.getElementById('randomize');
+    const clearBtn = document.getElementById('clear');
+    const pauseBtn = document.getElementById('pause');
+    const saveBtn = document.getElementById('save');
+    const copyBtn = document.getElementById('copy');
+
+    let w = 0;
+    let h = 0;
+    let frame = 0;
+    let paused = false;
+    let pulse = true;
+    let chaos = 12;
+    let dpr = Math.min(2, window.devicePixelRatio || 1);
+
+    const particles = [];
+    const beacons = [];
+    const pointer = {x: 0, y: 0};
+
+    let seed = Math.floor(Math.random() * 0xffffff);
+
+    const MAX_PARTICLES = 900;
+    const TWO_PI = Math.PI * 2;
+
+    function mulberry32(a) {
+      return function() {
+        a |= 0;
+        a = a + 0x6D2B79F5 | 0;
+        let t = Math.imul(a ^ a >>> 15, 1 | a);
+        t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+      };
+    }
+
+    let rand = mulberry32(seed);
+
+    function reseed(nextSeed) {
+      if (Number.isInteger(nextSeed)) {
+        seed = (nextSeed >>> 0);
+      } else {
+        seed = (Math.floor(Math.random() * 0xffffff) >>> 0);
+      }
+      rand = mulberry32(seed);
+      seedLabelEl.textContent = seed.toString(16).toUpperCase().padStart(6, '0');
+    }
+
+    function resize() {
+      w = window.innerWidth;
+      h = window.innerHeight;
+      canvas.width = Math.floor(w * dpr);
+      canvas.height = Math.floor(h * dpr);
+      ctx.setTransform(dpr, 0, dpr, 0, 0);
+    }
+
+    function makeParticle() {
+      const sx = rand() * w;
+      const sy = rand() * h;
+      const a = rand() * TWO_PI;
+      const sp = 0.3 + rand() * 1.3;
+      return {
+        x: sx,
+        y: sy,
+        vx: Math.cos(a) * sp,
+        vy: Math.sin(a) * sp,
+        age: 0,
+        life: 360 + rand() * 760,
+        hue: 40 + rand() * 140,
+      };
+    }
+
+    function seedBeacon(x, y) {
+      beacons.push({
+        x,
+        y,
+        strength: 0.65 + rand() * 0.8,
+        phase: rand() * TWO_PI,
+        radius: 28 + rand() * 44,
+        lastSpawn: Math.floor(rand() * 90),
+      });
+
+      const count = Math.max(8, Math.round(chaos));
+      for (let i = 0; i < count; i++) {
+        if (particles.length < MAX_PARTICLES) particles.push(makeParticle());
+      }
+      beaconCountEl.textContent = beacons.length;
+      particleCountEl.textContent = particles.length;
+    }
+
+    function addRandomBeacon() {
+      seedBeacon(rand() * w, rand() * h);
+    }
+
+    function nearestBeacon(x, y) {
+      if (!beacons.length) return null;
+      let best = null;
+      let bestD = Infinity;
+
+      for (const b of beacons) {
+        const dx = b.x - x;
+        const dy = b.y - y;
+        const d = dx * dx + dy * dy;
+        if (d < bestD) {
+          bestD = d;
+          best = b;
+        }
+      }
+      return {b: best, dist2: bestD};
+    }
+
+    function step() {
+      if (paused) return;
+      frame += 1;
+
+      ctx.fillStyle = 'rgba(4, 5, 10, 0.24)';
+      ctx.fillRect(0, 0, w, h);
+
+      // subtle grid of faint stars
+      ctx.fillStyle = 'rgba(255,255,255,0.04)';
+      for (let i = 0; i < 80; i++) {
+        const t = (i + frame * 0.002) % 101;
+        if (t < 1) {
+          ctx.fillRect((i * 73.1) % w, (i * 41.3) % h, 1.3, 1.3);
+        }
+      }
+
+      // Beacons glow and orbit
+      for (let i = 0; i < beacons.length; i++) {
+        const b = beacons[i];
+        b.phase += 0.003 + rand() * 0.002;
+        b.lastSpawn += 1;
+
+        const wave = Math.sin(frame * 0.012 + b.phase) * 0.3 + 1;
+        const alpha = Math.max(0.16, Math.min(0.9, b.strength * 0.35 * wave));
+        const grad = ctx.createRadialGradient(b.x, b.y, 6, b.x, b.y, b.radius * 2);
+        grad.addColorStop(0, `rgba(255, 232, 167, ${alpha})`);
+        grad.addColorStop(1, 'rgba(255, 232, 167, 0)');
+        ctx.beginPath();
+        ctx.fillStyle = grad;
+        ctx.arc(b.x, b.y, b.radius * 2, 0, TWO_PI);
+        ctx.fill();
+      }
+
+      // update particles
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+
+        const near = nearestBeacon(p.x, p.y);
+        if (near && near.b) {
+          const b = near.b;
+          const dx = b.x - p.x;
+          const dy = b.y - p.y;
+          const dist = Math.max(12, Math.sqrt(near.dist2));
+          const pull = b.strength * 0.008;
+
+          p.vx += (dx / dist) * pull;
+          p.vy += (dy / dist) * pull;
+        }
+
+        const swirl = Math.sin((p.x + p.y) * 0.003 + frame * 0.003) * 0.006;
+        const cx = (p.y - h * 0.5) / Math.max(h, 1);
+        const cy = (p.x - w * 0.5) / Math.max(w, 1);
+        p.vx += (-cy) * swirl;
+        p.vy += cx * swirl;
+
+        const pointerAttract = 0.00045;
+        const pdx = pointer.x - p.x;
+        const pdy = pointer.y - p.y;
+        p.vx += pdx * pointerAttract * (pulse ? 0.75 : 0.35);
+        p.vy += pdy * pointerAttract * (pulse ? 0.75 : 0.35);
+
+        const jitter = chaos * 0.00003;
+        p.vx += (rand() - 0.5) * jitter;
+        p.vy += (rand() - 0.5) * jitter;
+
+        const speed = Math.hypot(p.vx, p.vy) || 0.0001;
+        if (speed > 2.2) {
+          p.vx = (p.vx / speed) * 2.2;
+          p.vy = (p.vy / speed) * 2.2;
+        }
+
+        p.x += p.vx;
+        p.y += p.vy;
+        p.age += 1;
+
+        const fade = Math.min(1, p.age / p.life);
+        const alpha = 1 - fade;
+        const hBase = p.hue + (pulse ? 8 : 0);
+        ctx.beginPath();
+        ctx.fillStyle = `hsla(${(hBase + (pulse ? (dist(p.x, p.y, pointer.x, pointer.y) * 0.02) : 0)) % 360}, 85%, 65%, ${Math.max(0.03, alpha)})`;
+        ctx.arc(p.x, p.y, 1 + (1 - fade) * 1.4, 0, TWO_PI);
+        ctx.fill();
+
+        if (p.x < -12 || p.x > w + 12 || p.y < -12 || p.y > h + 12 || p.age > p.life) {
+          particles.splice(i, 1);
+          continue;
+        }
+
+        if (near && near.b && pulse) {
+          const d = Math.sqrt(near.dist2);
+          if (d < near.b.radius && rand() < 0.04) {
+            p.vx += (rand() - 0.5) * 1.4;
+            p.vy += (rand() - 0.5) * 1.4;
+          }
+        }
+      }
+
+      if (beacons.length === 0 && particles.length === 0) {
+        if (frame % 120 === 0) addRandomBeacon();
+      }
+
+      while (particles.length < 260) particles.push(makeParticle());
+
+      particleCountEl.textContent = particles.length;
+      modeLabelEl.textContent = pulse ? 'pulse' : 'drift';
+
+      // occasional random drift
+      if (frame % 280 === 0 && beacons.length > 2 && particles.length > 50) {
+        for (let i = 0; i < 3; i++) addRandomBeacon();
+      }
+    }
+
+    function dist(ax, ay, bx, by) {
+      const dx = ax - bx;
+      const dy = ay - by;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    function render() {
+      step();
+      requestAnimationFrame(render);
+    }
+
+    function copyState() {
+      const state = {
+        seed,
+        chaos,
+        pulse,
+        beacons: beacons.map((b) => ({ x: Math.round(b.x), y: Math.round(b.y), strength: +b.strength.toFixed(3), radius: Math.round(b.radius) }))
+      };
+      const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(state))));
+      const url = `${location.pathname}?state=${encoded}`;
+      navigator.clipboard?.writeText(`${location.origin}/${url}`);
+      copyBtn.textContent = 'State copied';
+      setTimeout(() => { copyBtn.textContent = 'Copy scene state'; }, 1500);
+    }
+
+    function loadStateFromHashish() {
+      const params = new URLSearchParams(location.search);
+      const state = params.get('state');
+      if (!state) return;
+      try {
+        const parsed = JSON.parse(decodeURIComponent(escape(atob(state))));
+        reseed(parsed.seed || 1);
+        chaos = parsed.chaos || chaos;
+        if (typeof parsed.pulse === 'boolean') pulse = parsed.pulse;
+        if (Array.isArray(parsed.beacons) && parsed.beacons.length) {
+          for (const raw of parsed.beacons) {
+            beacons.push({
+              x: raw.x, y: raw.y,
+              strength: raw.strength || 0.8,
+              phase: rand() * TWO_PI,
+              radius: raw.radius || 40,
+              lastSpawn: 0,
+            });
+          }
+        }
+        for (let i = 0; i < 500; i++) particles.push(makeParticle());
+        updateButtons();
+      } catch (_e) {
+        // ignore malformed links
+      }
+    }
+
+    function updateButtons() {
+      beaconCountEl.textContent = beacons.length;
+      particleCountEl.textContent = particles.length;
+      seedLabelEl.textContent = seed.toString(16).toUpperCase().padStart(6, '0');
+      modeLabelEl.textContent = pulse ? 'pulse' : 'drift';
+      togglePulse.className = pulse ? 'active' : '';
+      togglePulse.textContent = pulse ? 'Pulse: on' : 'Pulse: off';
+      toggleChaos.textContent = `Chaos: ${Math.round(chaos)}`;
+      pauseBtn.textContent = paused ? 'Resume' : 'Pause';
+    }
+
+    togglePulse.addEventListener('click', () => {
+      pulse = !pulse;
+      updateButtons();
+    });
+
+    toggleChaos.addEventListener('click', () => {
+      chaos += 4;
+      if (chaos > 32) chaos = 4;
+      if (chaos < 4) chaos = 4;
+      updateButtons();
+    });
+
+    randomizeBtn.addEventListener('click', () => {
+      reseed();
+      beacons.length = 0;
+      particles.length = 0;
+      for (let i = 0; i < 260; i++) particles.push(makeParticle());
+      updateButtons();
+    });
+
+    clearBtn.addEventListener('click', () => {
+      beacons.length = 0;
+      particles.length = 0;
+      updateButtons();
+    });
+
+    pauseBtn.addEventListener('click', () => {
+      paused = !paused;
+      updateButtons();
+      if (!paused) render();
+    });
+
+    saveBtn.addEventListener('click', () => {
+      const a = document.createElement('a');
+      a.download = `ritual-tide-${Date.now()}.png`;
+      a.href = canvas.toDataURL('image/png');
+      a.click();
+    });
+
+    copyBtn.addEventListener('click', copyState);
+
+    window.addEventListener('pointerdown', (e) => {
+      pointer.x = e.clientX;
+      pointer.y = e.clientY;
+      seedBeacon(e.clientX, e.clientY);
+    });
+
+    window.addEventListener('pointermove', (e) => {
+      pointer.x = e.clientX;
+      pointer.y = e.clientY;
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.target && ['INPUT','TEXTAREA'].includes(e.target.tagName)) return;
+      if (e.code === 'Space') {
+        paused = !paused;
+        updateButtons();
+        if (!paused) render();
+      }
+      if (e.key.toLowerCase() === 'r') randomizeBtn.click();
+      if (e.key.toLowerCase() === 'c') clearBtn.click();
+      if (e.key.toLowerCase() === 'b') addRandomBeacon();
+      if (e.key.toLowerCase() === 'p') togglePulse.click();
+      if (e.key.toLowerCase() === 's') saveBtn.click();
+    });
+
+    function init() {
+      resize();
+      reseed(seed);
+      for (let i = 0; i < 6; i++) addRandomBeacon();
+      for (let i = 0; i < 260; i++) particles.push(makeParticle());
+      loadStateFromHashish();
+      updateButtons();
+      requestAnimationFrame(render);
+    }
+
+    window.addEventListener('resize', resize);
+    init();
+
+  </script>
+</body>
+</html>

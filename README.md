@@ -32,6 +32,7 @@ A subtle ambient hum can be started from a user gesture so the scene does not st
 - `fractal-chorus.html`: inject pulses and watch a drifting membrane of particles braid into unstable sonic-like loops.
 - `lumen-vault.html`: drop luminous seeds and trace drifting ghost lines through a breathing particle field.
 - `void-harvest.html`: constellation seeds and drifting fireflies braid pulse-lines into a nervous-system-like field.
+- `ritual-tide.html`: add beacons and tune tide/chaos to bend drifting particles into living currents.
 
 ## Notes
 

@@ -28,6 +28,7 @@ A subtle ambient hum can be started from a user gesture so the scene does not st
 - `strange-computational-art.html`: attractor-based orbital swarm that layers glow and harmonic states.
 - `noise-lullaby.html`: noise-driven lullaby field with pointer influence, pulse bursts, and breathing controls.
 - `lattice-liturgy.html`: click-to-spawn drift lattice with surging threads and entropy gestures.
+- `orbital-whisper.html`: summon star-beacons and orbiting glyphs in a whisper-field simulation.
 
 ## Notes
 

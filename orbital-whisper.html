@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Orbital Whisper — Moth Choir Lab</title>
+  <meta name="description" content="A generative swarm field where clicks become stars and the page listens as moth-like particles orbit a rumor of gravity." />
+  <style>
+    :root {
+      --bg: #04020d;
+      --panel: rgba(12, 10, 28, 0.78);
+      --line: rgba(255, 255, 255, 0.14);
+      --ink: #f6f1ff;
+      --muted: #b7aed9;
+      --glow: #8ff0ff;
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(circle at 20% 12%, rgba(143, 240, 255, 0.12), transparent 40%),
+        radial-gradient(circle at 82% 82%, rgba(255, 126, 214, 0.16), transparent 32%),
+        radial-gradient(circle at 50% 55%, rgba(86, 60, 255, 0.12), transparent 38%),
+        var(--bg);
+      color: var(--ink);
+      font-family: "Trebuchet MS", "DejaVu Sans", "Segoe UI", sans-serif;
+    }
+
+    canvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .hud {
+      position: fixed;
+      left: 14px;
+      top: 14px;
+      width: min(390px, calc(100vw - 28px));
+      padding: 14px 15px;
+      border-radius: 14px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      backdrop-filter: blur(6px);
+      z-index: 3;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.36);
+    }
+
+    h1 {
+      margin: 0 0 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 1.05rem;
+    }
+
+    p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.35;
+      font-size: 0.88rem;
+    }
+
+    .grid {
+      margin-top: 10px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 6px 10px;
+      font-size: 0.84rem;
+      color: var(--muted);
+    }
+
+    .value {
+      color: var(--ink);
+      font-variant-numeric: tabular-nums;
+      font-family: "Courier New", monospace;
+      font-weight: bold;
+    }
+
+    .controls {
+      margin-top: 10px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    button {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: linear-gradient(140deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.02));
+      color: var(--ink);
+      padding: 8px 10px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 0.8rem;
+    }
+
+    button:hover { border-color: rgba(255, 255, 255, 0.32); }
+    button.active { box-shadow: 0 0 0 1px rgba(143, 240, 255, 0.35) inset; border-color: rgba(143, 240, 255, 0.75); }
+    .hint { margin-top: 10px; color: var(--muted); font-size: 0.74rem; line-height: 1.45; }
+
+    .source-link {
+      display: inline-flex;
+      margin-top: 9px;
+      color: var(--glow);
+      text-decoration: none;
+      font-size: 0.78rem;
+    }
+
+    .source-link:hover { text-decoration: underline; }
+
+    @media (max-width: 620px) {
+      .hud { width: calc(100vw - 16px); left: 8px; top: 8px; }
+      .controls { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="sky" aria-hidden="true"></canvas>
+
+  <aside class="hud" aria-label="Orbital whisper controls">
+    <h1>Orbital Whisper</h1>
+    <p>Click to summon stars. Drag slowly. The swarm will chase a memory that keeps rewriting itself in real time.</p>
+
+    <div class="grid">
+      <span>Field glyphs</span><span class="value" id="glyphCount">0</span>
+      <span>Star beacons</span><span class="value" id="beaconCount">0</span>
+      <span>Breathing</span><span class="value" id="breath">0.00</span>
+      <span>Entropy</span><span class="value" id="entropy">0.00</span>
+    </div>
+
+    <div class="controls">
+      <button id="shuffle">Randomize mood</button>
+      <button id="clear">Clear beacons</button>
+      <button id="pause">Pause pulse</button>
+      <button id="download">Download postcard</button>
+    </div>
+
+    <p class="hint">Keys: <strong>click</strong> place beacon, <strong>space</strong> pause, <strong>r</strong> reseed, <strong>s</strong> save image.</p>
+    <a class="source-link" href="https://github.com/garytalbot/moth-choir/blob/main/orbital-whisper.html" target="_blank" rel="noopener noreferrer">Open source file</a>
+  </aside>
+
+  <script>
+    const canvas = document.getElementById('sky');
+    const ctx = canvas.getContext('2d');
+
+    const glyphCountEl = document.getElementById('glyphCount');
+    const beaconCountEl = document.getElementById('beaconCount');
+    const breathEl = document.getElementById('breath');
+    const entropyEl = document.getElementById('entropy');
+
+    const glyphTarget = 1400;
+    const glyphs = [];
+    const beacons = [];
+    const pointer = { x: innerWidth / 2, y: innerHeight / 2, down: false };
+
+    const params = {
+      t: 0,
+      running: true,
+      drift: 0.45,
+      attractStrength: 0.0018,
+      repulse: 0.00035,
+      seed: cryptoRandomSeed(),
+      orbitScale: 0.001,
+      lifeScale: 1,
+      entropy: 0.17,
+      paused: false
+    };
+
+    const ui = {
+      glyphCount: glyphCountEl,
+      beaconCount: beaconCountEl,
+      breath: breathEl,
+      entropy: entropyEl,
+      shuffle: document.getElementById('shuffle'),
+      clear: document.getElementById('clear'),
+      pause: document.getElementById('pause'),
+      download: document.getElementById('download')
+    };
+
+    let w = 0;
+    let h = 0;
+    let dpr = 1;
+
+    function cryptoRandomSeed() {
+      const hash = window.location.search.match(/seed=([0-9]+)/);
+      if (hash) return Math.abs(parseInt(hash[1], 10) % 2147483647) || 1;
+      return Math.floor(Math.random() * 2147483647);
+    }
+
+    function mulberry32(a) {
+      return function() {
+        a |= 0;
+        a = (a + 0x6d2b79f5) | 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+
+    function resize() {
+      w = innerWidth;
+      h = innerHeight;
+      dpr = devicePixelRatio || 1;
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+      canvas.style.width = w + 'px';
+      canvas.style.height = h + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      if (glyphs.length === 0) spawnGlyphs();
+    }
+
+    function rand(seedFn) {
+      return seedFn() * 2 - 1;
+    }
+
+    function spawnGlyphs() {
+      const random = mulberry32(params.seed);
+      glyphs.length = 0;
+      for (let i = 0; i < glyphTarget; i++) {
+        glyphs.push({
+          x: Math.random() * w,
+          y: Math.random() * h,
+          vx: rand(random) * 0.4,
+          vy: rand(random) * 0.4,
+          hue: 220 + Math.floor(Math.abs(rand(random)) * 90),
+          drift: 0.4 + random() * 1.0,
+          age: random() * 1000,
+          phase: random() * Math.PI * 2,
+          orbit: 0.6 + random() * 0.9
+        });
+      }
+      glyphCountEl.textContent = glyphs.length.toString();
+    }
+
+    function addBeacon(x, y) {
+      beacons.push({ x, y, age: 0, radius: 48, pulse: 0.15 + Math.random() * 0.45, hue: 220 + Math.random() * 100 });
+      beaconCountEl.textContent = beacons.length.toString();
+    }
+
+    function noiseField(x, y, t, phase) {
+      const a = Math.sin((x * params.orbitScale) + t * params.drift + phase);
+      const b = Math.cos((y * params.orbitScale * 0.93) - t * 0.7 + phase * 1.1);
+      const c = Math.sin((x + y) * params.orbitScale * 0.4 + t * 0.9 + phase * 0.7);
+      const d = Math.cos((x - y) * params.orbitScale * 0.6 - t * 0.4 + phase);
+      const f = (a + b + c + d) * 0.25;
+      return f * 1.6;
+    }
+
+    function updateGlyph(g, index, dt) {
+      const t = params.t;
+      const px = g.x - pointer.x;
+      const py = g.y - pointer.y;
+      const cursorPull = Math.exp(-(px * px + py * py) / 120000);
+
+      const driftField = noiseField(g.x, g.y, t, g.phase) * g.drift;
+      g.vx += Math.cos(driftField * Math.PI * 1.3 + g.orbit) * 0.05 * dt;
+      g.vy += Math.sin(driftField * Math.PI * 1.3 + g.phase * 0.15) * 0.05 * dt;
+      g.vx += (px / (Math.hypot(px, py) + 1)) * cursorPull * params.repulse;
+      g.vy += (py / (Math.hypot(px, py) + 1)) * cursorPull * params.repulse;
+
+      let fx = 0;
+      let fy = 0;
+      let total = 0;
+      for (let i = 0; i < beacons.length; i++) {
+        const b = beacons[i];
+        const dx = b.x - g.x;
+        const dy = b.y - g.y;
+        const dist2 = dx * dx + dy * dy + 120;
+        const w = b.pulse / dist2;
+        fx += (dx * w) * 1600;
+        fy += (dy * w) * 1600;
+        total += w;
+      }
+
+      if (total > 0) {
+        fx /= Math.max(1, beacons.length);
+        fy /= Math.max(1, beacons.length);
+        g.vx += fx * params.attractStrength * dt;
+        g.vy += fy * params.attractStrength * dt;
+      }
+
+      g.vx *= 0.99;
+      g.vy *= 0.99;
+      g.x += g.vx * params.lifeScale * dt;
+      g.y += g.vy * params.lifeScale * dt;
+
+      if (g.x < -20) g.x = w + 20;
+      if (g.x > w + 20) g.x = -20;
+      if (g.y < -20) g.y = h + 20;
+      if (g.y > h + 20) g.y = -20;
+
+      g.age += dt * 0.001;
+      if (g.age > 9999 && Math.random() < 0.01) {
+        g.x = Math.random() * w;
+        g.y = Math.random() * h;
+        g.age = 0;
+      }
+
+      const breathe = 0.65 + Math.sin((t + g.phase) * 0.01) * 0.35;
+      const base = 0.25 + cursorPull * 0.9;
+      ctx.strokeStyle = `hsla(${220 + g.hue * 0.08}, 85%, ${40 + g.orbit * 20}%, ${base * 0.3})`;
+      ctx.fillStyle = `hsla(${220 + g.hue * 0.08}, 90%, ${58 + g.orbit * 18}%, ${base * 0.22})`;
+      const s = 0.8 + g.orbit * 1.7;
+      ctx.beginPath();
+      ctx.arc(g.x, g.y, s * breathe, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (index % 7 === 0) {
+        ctx.strokeStyle = `hsla(${300 + g.hue * 0.12}, 80%, 65%, ${0.03 + 0.01 * cursorPull})`;
+        ctx.beginPath();
+        ctx.moveTo(g.x, g.y);
+        ctx.lineTo(g.x - g.vx * 20, g.y - g.vy * 20);
+        ctx.stroke();
+      }
+    }
+
+    function drawBeacons() {
+      for (let i = 0; i < beacons.length; i++) {
+        const b = beacons[i];
+        b.age += 0.008;
+        b.pulse = 0.6 + Math.sin(b.age + i) * 0.3;
+
+        const size = b.radius * (0.9 + b.pulse * 0.9);
+        const glow = `hsla(${b.hue}, 85%, 65%, ${0.24 * b.pulse})`;
+        const core = `hsla(${b.hue}, 92%, 78%, ${0.85})`;
+        const ring = `hsla(${b.hue}, 78%, 56%, 0.12)`;
+
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, size * 2.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = ring;
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, size * 1.1, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = core;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, 2.8, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    function render() {
+      params.t += params.paused ? 0 : 1;
+      if (!params.running) return;
+
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = 'rgba(4,2,13,0.08)';
+      ctx.fillRect(0, 0, w, h);
+
+      const breath = (Math.sin(params.t * 0.006) + 1) * 0.5;
+      const entropy = Math.sin(params.t * 0.002 + 3.2) * 0.35 + params.entropy;
+      breathEl.textContent = breath.toFixed(2);
+      entropyEl.textContent = Math.abs(entropy).toFixed(2);
+      params.entropy = Math.abs(entropy);
+
+      drawBeacons();
+      ctx.globalCompositeOperation = 'lighter';
+      const dt = 1;
+      for (let i = 0; i < glyphs.length; i++) {
+        updateGlyph(glyphs[i], i, dt);
+      }
+
+      requestAnimationFrame(render);
+    }
+
+    function reseed() {
+      params.seed = Math.floor(Math.random() * 2147483647);
+      params.t = 0;
+      params.lifeScale = 0.8 + Math.random() * 0.7;
+      params.attractStrength = 0.0012 + Math.random() * 0.0011;
+      params.drift = 0.35 + Math.random() * 0.35;
+      params.repulse = 0.00025 + Math.random() * 0.0003;
+      spawnGlyphs();
+      beacons.length = 0;
+      beaconCountEl.textContent = '0';
+      history.replaceState({}, '', `${location.pathname}?seed=${params.seed}`);
+    }
+
+    function savePostcard() {
+      const img = canvas.toDataURL('image/png');
+      const anchor = document.createElement('a');
+      anchor.href = img;
+      anchor.download = `orbital-whisper-${Date.now()}.png`;
+      anchor.click();
+    }
+
+    function init() {
+      addEventListener('resize', resize);
+      canvas.addEventListener('click', (event) => {
+        addBeacon(event.clientX, event.clientY);
+      });
+      canvas.addEventListener('pointermove', (event) => {
+        pointer.x = event.clientX;
+        pointer.y = event.clientY;
+      });
+      addEventListener('keydown', (event) => {
+        if (event.code === 'Space') {
+          params.paused = !params.paused;
+          event.preventDefault();
+          ui.pause.textContent = params.paused ? 'Resume pulse' : 'Pause pulse';
+          ui.pause.classList.toggle('active', params.paused);
+          return;
+        }
+        if (event.key.toLowerCase() === 'r') {
+          reseed();
+        }
+        if (event.key.toLowerCase() === 's') {
+          savePostcard();
+        }
+        if (event.key.toLowerCase() === 'c') {
+          beacons.length = 0;
+          beaconCountEl.textContent = '0';
+        }
+      });
+
+      ui.shuffle.addEventListener('click', reseed);
+      ui.clear.addEventListener('click', () => {
+        beacons.length = 0;
+        beaconCountEl.textContent = '0';
+      });
+      ui.pause.addEventListener('click', () => {
+        params.paused = !params.paused;
+        ui.pause.textContent = params.paused ? 'Resume pulse' : 'Pause pulse';
+        ui.pause.classList.toggle('active', params.paused);
+      });
+      ui.download.addEventListener('click', savePostcard);
+
+      resize();
+      spawnGlyphs();
+      addBeacon(w * 0.28, h * 0.32);
+      requestAnimationFrame(render);
+    }
+
+    init();
+  </script>
+</body>
+</html>

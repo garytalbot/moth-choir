@@ -1,0 +1,596 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nocturne Lattice</title>
+  <meta
+    name="description"
+    content="A nocturnal particle lattice where clicks become seed wells and a breathing swarm weaves through a changing tide and controlled chaos."
+  />
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Nocturne Lattice">
+  <meta
+    property="og:description"
+    content="A nocturnal particle lattice where clicks become seed wells and a breathing swarm weaves through a changing tide and controlled chaos."
+  >
+  <meta property="og:url" content="https://garytalbot.github.io/moth-choir/nocturne-lattice.html">
+  <meta property="og:image" content="https://garytalbot.github.io/moth-choir/assets/social-card.svg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Nocturne Lattice">
+  <meta
+    name="twitter:description"
+    content="A nocturnal particle lattice where clicks become seed wells and a breathing swarm weaves through a changing tide and controlled chaos."
+  >
+  <meta name="twitter:image" content="https://garytalbot.github.io/moth-choir/assets/social-card.svg">
+  <style>
+    :root {
+      --bg: #05060e;
+      --panel: rgba(12, 16, 28, 0.8);
+      --line: rgba(255, 255, 255, 0.2);
+      --text: #f6f2ff;
+      --muted: #b6b8ca;
+      --accent: #95d4ff;
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(circle at 15% 10%, rgba(149, 212, 255, 0.12), transparent 36%),
+        radial-gradient(circle at 90% 88%, rgba(255, 130, 208, 0.16), transparent 33%),
+        var(--bg);
+      color: var(--text);
+      font-family: Inter, "Segoe UI", system-ui, sans-serif;
+    }
+
+    canvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .hud {
+      position: fixed;
+      left: 14px;
+      top: 14px;
+      width: min(420px, calc(100vw - 28px));
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px;
+      backdrop-filter: blur(5px);
+      z-index: 3;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 1.08rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.85rem;
+      line-height: 1.4;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px 10px;
+      margin-top: 8px;
+      font-size: 0.81rem;
+      color: var(--muted);
+    }
+
+    .value {
+      color: var(--text);
+      font-family: "Courier New", monospace;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .row {
+      margin-top: 8px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    button,
+    .link {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: linear-gradient(155deg, rgba(255,255,255,0.15), rgba(255,255,255,0.03));
+      color: var(--text);
+      border-radius: 10px;
+      cursor: pointer;
+      padding: 8px 10px;
+      font-size: 0.78rem;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      min-width: 86px;
+      transition: border-color 0.18s ease;
+      user-select: none;
+    }
+
+    button:hover, .link:hover { border-color: rgba(255,255,255,0.38); }
+    button:focus-visible, .link:focus-visible {
+      outline: 2px solid rgba(149, 212, 255, 0.62);
+      outline-offset: 2px;
+    }
+
+    button.active { border-color: rgba(149, 212, 255, 0.9); }
+
+    .slider-block {
+      margin-top: 10px;
+      display: grid;
+      gap: 8px;
+      font-size: 0.76rem;
+      color: var(--muted);
+    }
+
+    .slider-line { display: grid; grid-template-columns: 78px 1fr 52px; gap: 8px; align-items: center; }
+    input[type="range"] { width: 100%; }
+
+    .mini {
+      margin-top: 8px;
+      display: block;
+      color: var(--muted);
+      font-size: 0.74rem;
+      line-height: 1.35;
+    }
+
+    .source {
+      margin-top: 10px;
+      color: var(--accent);
+      border-color: rgba(149, 212, 255, 0.35);
+    }
+
+    @media (max-width: 640px) {
+      .hud { left: 8px; top: 8px; width: calc(100vw - 16px); }
+      .row { gap: 6px; }
+      button { min-width: 74px; font-size: 0.74rem; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="field" aria-hidden="true"></canvas>
+
+  <aside class="hud" aria-label="Nocturne Lattice controls">
+    <h1>Nocturne Lattice</h1>
+    <p>Click to seed wells. The lattice hears your chaos, breathes in tides, and slowly forgets. Drag to feel the field bend.</p>
+
+    <div class="stats">
+      <div>Beacons <span id="beaconCount" class="value">0</span></div>
+      <div>Particles <span id="particleCount" class="value">0</span></div>
+      <div>Density <span id="densityValue" class="value">0.95</span></div>
+      <div>Chaos <span id="chaosValue" class="value">0.31</span></div>
+    </div>
+
+    <div class="row">
+      <button id="seedButton">Seed well</button>
+      <button id="clearButton">Clear wells</button>
+      <button id="pauseButton">Pause</button>
+      <button id="reseedButton">Reseed</button>
+      <button id="copyButton">Copy link</button>
+      <button id="saveButton">Save frame</button>
+      <a class="link source" href="https://github.com/garytalbot/moth-choir/blob/main/nocturne-lattice.html" target="_blank" rel="noopener noreferrer">Source</a>
+      <a class="link source" href="./">Return</a>
+    </div>
+
+    <div class="slider-block">
+      <div class="slider-line">
+        <label for="density">Density</label>
+        <input id="density" min="0.3" max="2.2" step="0.05" type="range" value="0.95">
+        <span id="densityReadout">0.95</span>
+      </div>
+      <div class="slider-line">
+        <label for="tide">Tide</label>
+        <input id="tide" min="0.2" max="2.1" step="0.05" type="range" value="1.0">
+        <span id="tideReadout">1.00</span>
+      </div>
+      <div class="slider-line">
+        <label for="chaos">Chaos</label>
+        <input id="chaos" min="0.01" max="0.9" step="0.01" type="range" value="0.31">
+        <span id="chaosReadout">0.31</span>
+      </div>
+    </div>
+
+    <span class="mini">Keys: click = beacon, space = pause, r = reseed, c = clear, s = save, d = random seed.</span>
+    <span class="mini">The link includes the seed and your current controls so the same lattice can be shared as a ritual state.</span>
+  </aside>
+
+  <script>
+    const canvas = document.getElementById('field');
+    const ctx = canvas.getContext('2d');
+    const DPR = window.devicePixelRatio || 1;
+
+    const beacons = [];
+    const swarms = [];
+
+    const beaconCount = document.getElementById('beaconCount');
+    const particleCount = document.getElementById('particleCount');
+    const densityValue = document.getElementById('densityValue');
+    const chaosValue = document.getElementById('chaosValue');
+
+    const densityInput = document.getElementById('density');
+    const densityReadout = document.getElementById('densityReadout');
+    const tideInput = document.getElementById('tide');
+    const tideReadout = document.getElementById('tideReadout');
+    const chaosInput = document.getElementById('chaos');
+    const chaosReadout = document.getElementById('chaosReadout');
+
+    const seedButton = document.getElementById('seedButton');
+    const clearButton = document.getElementById('clearButton');
+    const pauseButton = document.getElementById('pauseButton');
+    const reseedButton = document.getElementById('reseedButton');
+    const copyButton = document.getElementById('copyButton');
+    const saveButton = document.getElementById('saveButton');
+
+    let width = 0;
+    let height = 0;
+    let raf = 0;
+    let t = 0;
+    let running = true;
+
+    const params = {
+      density: parseFloat(densityInput.value),
+      tide: parseFloat(tideInput.value),
+      chaos: parseFloat(chaosInput.value),
+      seed: Math.floor(Math.random() * 2147483647),
+      paused: false,
+    };
+
+    const pointer = {
+      x: 0,
+      y: 0,
+      down: false,
+    };
+
+    function parseSeedFromHash() {
+      const match = new URLSearchParams(window.location.search).get('seed');
+      const s = Number.parseInt(match || '', 10);
+      if (Number.isFinite(s) && s > 0) {
+        params.seed = Math.abs(s) % 2147483647;
+      }
+    }
+
+    function mulberry(a) {
+      return function() {
+        a |= 0;
+        a = (a + 0x6D2B79F5) | 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+
+    let random = mulberry(params.seed);
+    const rand = () => random() * 2 - 1;
+
+    function resize() {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = Math.floor(width * DPR);
+      canvas.height = Math.floor(height * DPR);
+      canvas.style.width = width + 'px';
+      canvas.style.height = height + 'px';
+      ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+      if (swarms.length === 0) spawnSwarm();
+    }
+
+    function seedFromCurrentState() {
+      const p = new URLSearchParams({
+        seed: String(params.seed),
+        density: params.density.toFixed(2),
+        tide: params.tide.toFixed(2),
+        chaos: params.chaos.toFixed(2),
+        beacons: beacons.length.toString(),
+      });
+      return `${window.location.pathname}?${p.toString()}`;
+    }
+
+    function spawnSwarm() {
+      swarms.length = 0;
+      const density = 800 * params.density;
+      for (let i = 0; i < density; i++) {
+        swarms.push({
+          x: Math.random() * width,
+          y: Math.random() * height,
+          vx: rand() * 0.8,
+          vy: rand() * 0.8,
+          m: Math.random() * 1.6 + 0.4,
+          hue: 200 + Math.floor(rand() * 80),
+          age: Math.random() * Math.PI * 2,
+        });
+      }
+      particleCount.textContent = swarms.length.toString();
+    }
+
+    function addBeacon(x, y) {
+      beacons.push({ x, y, age: 0, radius: 44 + random() * 30, glow: 1.2 + Math.random() * 0.7 });
+      beaconCount.textContent = beacons.length.toString();
+    }
+
+    function reseedAll() {
+      params.seed = Math.floor(1 + Math.random() * 2147483646);
+      random = mulberry(params.seed);
+      spawnSwarm();
+      maybeSeedFromRandom();
+      syncSeedHash(false);
+    }
+
+    function maybeSeedFromRandom() {
+      const seedInHash = new URLSearchParams(window.location.search).get('seed');
+      if (!seedInHash) params.seed = Math.max(1, params.seed);
+    }
+
+    function syncSeedHash(replace = true) {
+      const url = new URL(window.location.href);
+      const q = url.searchParams;
+      q.set('seed', String(params.seed));
+      q.set('density', params.density.toFixed(2));
+      q.set('tide', params.tide.toFixed(2));
+      q.set('chaos', params.chaos.toFixed(2));
+      if (replace) history.replaceState(null, '', `${url.pathname}?${q.toString()}`);
+    }
+
+    function noiseField(x, y, tval) {
+      const s = Math.sin((x * 0.0017) + tval * 0.18) + Math.cos((y * 0.0012) - tval * 0.11);
+      const w = Math.sin((x + y) * 0.00062 + tval * 0.06) + Math.cos((x - y) * 0.00047 - tval * 0.07);
+      return (s + w) * 0.5;
+    }
+
+    function stepSwarm(p) {
+      let fx = 0;
+      let fy = 0;
+
+      for (const b of beacons) {
+        const dx = b.x - p.x;
+        const dy = b.y - p.y;
+        const dd = Math.hypot(dx, dy) + 1;
+        const pull = Math.min(1300 / (dd * dd), 0.0005);
+        fx += (dx / dd) * pull * b.glow;
+        fy += (dy / dd) * pull * b.glow;
+      }
+
+      const drift = noiseField(p.x + pointer.x * 0.2, p.y + pointer.y * 0.2, t) * params.chaos;
+      const n = params.tide;
+      const dx = p.x - pointer.x;
+      const dy = p.y - pointer.y;
+      const d2 = dx * dx + dy * dy + 1200;
+      fx += Math.cos(drift) * 0.05 + (Math.sin(drift * 2.1) * 0.13) * params.chaos;
+      fy += Math.sin(drift) * 0.05 - (Math.cos(drift * 1.7) * 0.09) * params.chaos;
+
+      if (pointer.down) {
+        const attract = 0.0012 * n;
+        fx += (-dx / d2) * attract * 7000;
+        fy += (-dy / d2) * attract * 7000;
+      }
+
+      p.vx += fx * (0.75 + params.density * 0.03);
+      p.vy += fy * (0.75 + params.density * 0.03);
+
+      p.vx *= 0.965;
+      p.vy *= 0.965;
+
+      p.x += p.vx;
+      p.y += p.vy;
+      p.age += 0.002 + (params.density * 0.0008);
+
+      if (p.x < -20) p.x += width + 40;
+      if (p.x > width + 20) p.x -= width + 40;
+      if (p.y < -20) p.y += height + 40;
+      if (p.y > height + 20) p.y -= height + 40;
+    }
+
+    function draw(p) {
+      const a = (Math.sin(p.age * 2 + p.hue) + 1) * 0.5;
+      const sat = 60 + Math.min(30, Math.abs(p.vx + p.vy) * 7 + a * 15);
+      const light = 35 + Math.min(45, a * 40 + Math.min(0.2, Math.abs(p.vx) + Math.abs(p.vy)) * 60);
+      ctx.fillStyle = `hsl(${p.hue},${sat.toFixed(0)}%,${light.toFixed(0)}%)`;
+      ctx.globalAlpha = 0.35 + a * 0.5;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.m, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    function render() {
+      if (!running) {
+        raf = requestAnimationFrame(render);
+        return;
+      }
+
+      ctx.fillStyle = `rgba(5, 6, 14, ${0.07 + 0.03 / Math.max(0.6, params.tide)})`;
+      ctx.fillRect(0, 0, width, height);
+
+      for (const b of beacons) {
+        b.age += 0.015;
+        const alpha = 0.2 + Math.sin(b.age) * 0.05;
+        const r = b.radius + Math.sin(t * 0.015 + b.age) * 6;
+        ctx.strokeStyle = `rgba(149, 212, 255, ${alpha.toFixed(3)})`;
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, r, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      for (const p of swarms) {
+        stepSwarm(p);
+        draw(p);
+      }
+
+      t += 1;
+      if (Math.random() > 0.995) {
+        for (let i = 0; i < 1; i++) {
+          const p = swarms[Math.floor(random() * swarms.length)];
+          if (!p) continue;
+          ctx.fillStyle = 'rgba(255, 240, 255, 0.3)';
+          ctx.fillRect(p.x + Math.sin(t * 0.04) * 5, p.y + Math.cos(t * 0.04) * 5, 1.1, 1.1);
+        }
+      }
+
+      raf = requestAnimationFrame(render);
+    }
+
+    function updateReadouts() {
+      densityReadout.textContent = densityInput.value;
+      densityValue.textContent = densityInput.value;
+      chaosReadout.textContent = chaosInput.value;
+      chaosValue.textContent = chaosInput.value;
+      tideReadout.textContent = Number.parseFloat(tideInput.value).toFixed(2);
+    }
+
+    function applyFromControls() {
+      params.density = parseFloat(densityInput.value);
+      params.tide = parseFloat(tideInput.value);
+      params.chaos = parseFloat(chaosInput.value);
+      spawnSwarm();
+      syncSeedHash();
+      updateReadouts();
+    }
+
+    function copyScene() {
+      const link = `${window.location.origin}${seedFromCurrentState()}`;
+      navigator.clipboard?.writeText(link).then(() => {
+        copyButton.textContent = 'Link copied';
+        setTimeout(() => (copyButton.textContent = 'Copy link'), 900);
+      }).catch(() => {
+        copyButton.textContent = 'Copy blocked';
+        setTimeout(() => (copyButton.textContent = 'Copy link'), 900);
+      });
+    }
+
+    function saveFrame() {
+      const a = document.createElement('a');
+      a.href = canvas.toDataURL('image/png');
+      a.download = `nocturne-lattice-${params.seed}.png`;
+      a.click();
+    }
+
+    function handlePointer(e) {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      addBeacon(x, y);
+      syncSeedHash();
+    }
+
+    function bind() {
+      canvas.addEventListener('pointermove', (e) => {
+        pointer.x = e.clientX;
+        pointer.y = e.clientY;
+      });
+
+      canvas.addEventListener('pointerdown', (e) => {
+        pointer.down = true;
+        handlePointer(e);
+      });
+
+      window.addEventListener('pointerup', () => {
+        pointer.down = false;
+      });
+
+      canvas.addEventListener('click', handlePointer);
+
+      seedButton.addEventListener('click', (e) => {
+        e.preventDefault();
+        addBeacon(Math.random() * width, Math.random() * height);
+        syncSeedHash();
+      });
+      clearButton.addEventListener('click', () => {
+        beacons.length = 0;
+        beaconCount.textContent = '0';
+        syncSeedHash();
+      });
+      reseedButton.addEventListener('click', reseedAll);
+      copyButton.addEventListener('click', copyScene);
+      saveButton.addEventListener('click', saveFrame);
+
+      pauseButton.addEventListener('click', () => {
+        running = !running;
+        pauseButton.textContent = running ? 'Pause' : 'Resume';
+        pauseButton.classList.toggle('active', !running);
+      });
+
+      densityInput.addEventListener('input', applyFromControls);
+      tideInput.addEventListener('input', applyFromControls);
+      chaosInput.addEventListener('input', applyFromControls);
+
+      window.addEventListener('keydown', (e) => {
+        if (e.target && e.target.matches('input, textarea, button, select')) return;
+        if (e.code === 'Space') {
+          e.preventDefault();
+          pauseButton.click();
+        }
+        if (e.key === 'c') {
+          clearButton.click();
+        }
+        if (e.key === 'r') {
+          reseedButton.click();
+        }
+        if (e.key === 's') {
+          saveFrame();
+        }
+        if (e.key === 'd') {
+          parseSeedFromHash();
+          reseedAll();
+        }
+      });
+    }
+
+    function init() {
+      parseSeedFromHash();
+      random = mulberry(params.seed);
+      const q = new URLSearchParams(window.location.search);
+      if (q.has('density')) {
+        const d = Number.parseFloat(q.get('density'));
+        if (Number.isFinite(d)) {
+          params.density = Math.min(2.2, Math.max(0.3, d));
+        }
+      }
+      if (q.has('tide')) {
+        const v = Number.parseFloat(q.get('tide'));
+        if (Number.isFinite(v)) {
+          params.tide = Math.min(2.1, Math.max(0.2, v));
+        }
+      }
+      if (q.has('chaos')) {
+        const c = Number.parseFloat(q.get('chaos'));
+        if (Number.isFinite(c)) {
+          params.chaos = Math.min(0.9, Math.max(0.01, c));
+        }
+      }
+      densityInput.value = String(params.density);
+      tideInput.value = String(params.tide);
+      chaosInput.value = String(params.chaos);
+      updateReadouts();
+
+      for (let i = 0; i < 3; i++) {
+        addBeacon(Math.random() * window.innerWidth, Math.random() * window.innerHeight);
+      }
+      spawnSwarm();
+      bind();
+      syncSeedHash(true);
+      resize();
+      raf = requestAnimationFrame(render);
+    }
+
+    window.addEventListener('resize', resize);
+    init();
+  </script>
+</body>
+</html>

@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Strange Computational Art – Moth Choir Lab</title>
+  <meta name="description" content="A generative visual toy where moving glyphs reveal symbolic state and drift in and out of coherence.">
+  <style>
+    :root {
+      --bg: #05040f;
+      --panel: rgba(10, 8, 26, 0.84);
+      --ink: #f6f1ff;
+      --muted: #b9b3df;
+      --line: rgba(255, 255, 255, 0.14);
+      --accent: #8ff0ff;
+      --accent-2: #ff88dd;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      font-family: "Trebuchet MS", "DejaVu Sans", "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at 20% 20%, rgba(130, 88, 255, 0.24), transparent 40%),
+        radial-gradient(circle at 75% 15%, rgba(36, 200, 240, 0.18), transparent 30%),
+        radial-gradient(circle at 85% 80%, rgba(255, 108, 200, 0.16), transparent 35%),
+        var(--bg);
+      color: var(--ink);
+      overflow: hidden;
+    }
+
+    #field {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .panel {
+      position: fixed;
+      left: 16px;
+      top: 16px;
+      width: min(380px, calc(100vw - 32px));
+      padding: 14px 16px;
+      border-radius: 14px;
+      background: var(--panel);
+      backdrop-filter: blur(6px);
+      border: 1px solid var(--line);
+      z-index: 2;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.38);
+    }
+
+    h1 {
+      margin: 0 0 6px;
+      font-size: 1.1rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .lead {
+      margin: 0;
+      font-size: 0.9rem;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+
+    .readout {
+      margin: 12px 0;
+      padding: 8px;
+      border: 1px dashed var(--line);
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.02);
+      font-family: "Courier New", monospace;
+      line-height: 1.4;
+      font-size: 0.85rem;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 6px 12px;
+      margin: 10px 0;
+      align-items: center;
+      font-size: 0.83rem;
+    }
+
+    .label {
+      color: var(--muted);
+      font-size: 0.77rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .value {
+      color: var(--ink);
+      font-family: "Courier New", monospace;
+      font-weight: bold;
+    }
+
+    .controls {
+      margin: 12px 0 6px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    button {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: linear-gradient(160deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.02));
+      color: var(--ink);
+      padding: 8px 10px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 0.82rem;
+    }
+
+    button:hover {
+      border-color: rgba(255, 255, 255, 0.34);
+    }
+
+    button.active {
+      border-color: rgba(143, 240, 255, 0.78);
+      box-shadow: 0 0 0 1px rgba(143, 240, 255, 0.35) inset;
+    }
+
+    .sigil {
+      margin-top: 8px;
+      padding: 9px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      background: rgba(5, 9, 29, 0.62);
+      color: #fff3c4;
+      font-family: "Courier New", monospace;
+      min-height: 40px;
+      overflow-wrap: anywhere;
+      font-size: 0.9rem;
+      letter-spacing: 0.02em;
+    }
+
+    .hint {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 0.74rem;
+      line-height: 1.45;
+    }
+
+    @media (max-width: 620px) {
+      .panel {
+        width: calc(100vw - 16px);
+        left: 8px;
+        top: 8px;
+      }
+
+      .controls {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="field" aria-hidden="true"></canvas>
+
+  <aside class="panel">
+    <h1>Strange Computation Chamber</h1>
+    <p class="lead">A symbolic swarm. Tap the dark surface to summon attractors, then let coherence and entropy argue with each other.</p>
+
+    <div class="readout" id="symbolic"></div>
+
+    <div class="row"><span class="label">Glyphs alive</span><span class="value" id="glyphCount">0</span></div>
+    <div class="row"><span class="label">Attractor nodes</span><span class="value" id="anchorCount">0</span></div>
+    <div class="row"><span class="label">Coherence</span><span class="value" id="coherence">0.00</span></div>
+    <div class="row"><span class="label">Entropy</span><span class="value" id="entropy">0.00</span></div>
+    <div class="row"><span class="label">Signal phase</span><span class="value" id="phase">0.00</span></div>
+
+    <div class="controls">
+      <button data-action="seed">New seed</button>
+      <button data-action="pulse">Entropy pulse</button>
+      <button data-action="toggle">Toggle conductor</button>
+      <button data-action="spiral">Spiral anchor</button>
+    </div>
+
+    <div class="sigil" id="stateSigil">--</div>
+    <p class="hint">Controls: click to add attractor, Shift + click to remove nearest, Space toggles conductor, P pulses entropy, R reseeds, M inverts moonwind.</p>
+  </aside>
+
+  <script>
+    const canvas = document.getElementById("field");
+    const ctx = canvas.getContext("2d");
+    const symbolic = document.getElementById("symbolic");
+    const glyphCount = document.getElementById("glyphCount");
+    const anchorCount = document.getElementById("anchorCount");
+    const coherenceReadout = document.getElementById("coherence");
+    const entropyReadout = document.getElementById("entropy");
+    const phaseReadout = document.getElementById("phase");
+    const sigil = document.getElementById("stateSigil");
+    const buttons = Array.from(document.querySelectorAll("[data-action]"));
+
+    let w = 0;
+    let h = 0;
+    let dpr = window.devicePixelRatio || 1;
+
+    const glyphs = [];
+    const anchors = [];
+    const pointer = { x: 0, y: 0, down: false };
+
+    const state = {
+      seed: Math.floor(Math.random() * 999999999),
+      phase: 0,
+      entropy: 0.18,
+      coherence: 0.72,
+      spiral: 0.7,
+      conductor: false,
+      running: true,
+      moonwind: 1
+    };
+
+    const symbols = ["⟨", "∷", "≈", "◉", "✦", "⟡", "∞", "⚬", "⌬", "◘"];
+    const moods = ["frost", "drift", "fracture", "breath", "knot", "singularity", "glint", "stutter"];
+
+    function rand(min, max) {
+      return min + Math.random() * (max - min);
+    }
+
+    function resize() {
+      w = window.innerWidth;
+      h = window.innerHeight;
+      dpr = window.devicePixelRatio || 1;
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+      canvas.style.width = w + "px";
+      canvas.style.height = h + "px";
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    function hashToUnit(value) {
+      let x = Math.sin(value * 127.1) * 43758.5453;
+      return x - Math.floor(x);
+    }
+
+    function makeGlyph(i) {
+      const n = hashToUnit(state.seed + i + 13);
+      const m = hashToUnit(state.seed * 1.618 + i);
+      const angle = Math.PI * 2 * n;
+      return {
+        x: rand(0, w),
+        y: rand(0, h),
+        vx: Math.cos(angle) * 0.3 * (0.5 + n),
+        vy: Math.sin(angle) * 0.3 * (0.5 + m),
+        phase: m * Math.PI * 2,
+        life: rand(0.4, 1),
+        radius: rand(0.8, 1.8),
+        hue: 200 + 100 * n,
+        prevX: 0,
+        prevY: 0
+      };
+    }
+
+    function seedGlyphs() {
+      glyphs.length = 0;
+      for (let i = 0; i < 260; i++) glyphs.push(makeGlyph(i));
+    }
+
+    function addAnchor(x, y, charge = 1) {
+      anchors.push({
+        x,
+        y,
+        charge,
+        strength: rand(55, 95),
+        radius: rand(70, 150),
+        drift: rand(0.001, 0.004)
+      });
+    }
+
+    function removeNearestAnchor(px, py) {
+      if (!anchors.length) return;
+      let nearest = 0;
+      let best = Number.POSITIVE_INFINITY;
+      for (let i = 0; i < anchors.length; i++) {
+        const a = anchors[i];
+        const d = (a.x - px) ** 2 + (a.y - py) ** 2;
+        if (d < best) {
+          best = d;
+          nearest = i;
+        }
+      }
+      if (best < 140 * 140) anchors.splice(nearest, 1);
+    }
+
+    function currentMood() {
+      const index = Math.floor((state.entropy * 8 + (1 - state.coherence)) * 4) % moods.length;
+      return moods[index];
+    }
+
+    function makeSigil() {
+      const bits = [
+        symbols[Math.floor(hashToUnit(state.seed) * symbols.length)],
+        symbols[Math.floor(hashToUnit(state.seed * 1.17) * symbols.length)],
+        symbols[Math.floor(hashToUnit(state.phase / 10) * symbols.length)],
+        symbols[Math.floor(hashToUnit(state.entropy + 0.11) * symbols.length)]
+      ];
+      return `𓂀 ${bits.join("")} :: ${currentMood()} :: φ${(state.phase % 1).toFixed(2)} `;
+    }
+
+    function updateReadout() {
+      glyphCount.textContent = glyphs.length;
+      anchorCount.textContent = anchors.length + 1; // implicit center anchor
+      coherenceReadout.textContent = state.coherence.toFixed(2);
+      entropyReadout.textContent = state.entropy.toFixed(2);
+      phaseReadout.textContent = state.phase.toFixed(2);
+      symbolic.textContent = `seed:${state.seed} | ${state.conductor ? "conductor:on" : "conductor:off"} | mood:${currentMood()} | drift:${state.moonwind > 0 ? "east" : "west"} | spiral:${state.spiral.toFixed(2)}`;
+      sigil.textContent = makeSigil();
+    }
+
+    function updatePhysics(g) {
+      let fx = 0;
+      let fy = 0;
+
+      // central anchor
+      const cx = (w * 0.5 - g.x);
+      const cy = (h * 0.5 - g.y);
+      const cDist = Math.max(20, Math.hypot(cx, cy));
+      fx += cx / cDist * (state.coherence * 0.18);
+      fy += cy / cDist * (state.coherence * 0.18);
+
+      // dynamic attractors
+      for (const a of anchors) {
+        const dx = a.x - g.x;
+        const dy = a.y - g.y;
+        const d = Math.max(12, Math.hypot(dx, dy));
+        const pull = (a.strength * a.charge) / (d * d);
+        fx += (dx / d) * pull;
+        fy += (dy / d) * pull;
+      }
+
+      if (state.conductor) {
+        const pdx = pointer.x - g.x;
+        const pdy = pointer.y - g.y;
+        const pd = Math.max(24, Math.hypot(pdx, pdy));
+        fx += (pdx / pd) * 0.45;
+        fy += (pdy / pd) * 0.45;
+      }
+
+      const spin = state.spiral * state.moonwind * 0.02;
+      const r = Math.max(64, Math.hypot(g.x - w * 0.5, g.y - h * 0.5));
+      fx += (g.y - h * 0.5) / r * spin;
+      fy += -(g.x - w * 0.5) / r * spin;
+
+      const jitter = Math.sin(state.phase + g.phase) * state.entropy * 0.2;
+      fx += jitter;
+      g.vx = g.vx * 0.98 + fx;
+      g.vy = g.vy * 0.98 + fy;
+      g.prevX = g.x;
+      g.prevY = g.y;
+      g.x += g.vx;
+      g.y += g.vy;
+
+      if (g.x < 0) g.x += w;
+      if (g.x > w) g.x -= w;
+      if (g.y < 0) g.y += h;
+      if (g.y > h) g.y -= h;
+    }
+
+    function render() {
+      if (!state.running) return;
+      requestAnimationFrame(render);
+
+      state.phase += 0.0016 + state.entropy * 0.008;
+      for (const a of anchors) {
+        a.x += Math.cos(state.phase * 2.7 + a.phase || 0) * a.drift;
+        a.y += Math.sin(state.phase * 2.4 + a.phase || 0) * a.drift;
+        a.x = (a.x + w) % w;
+        a.y = (a.y + h) % h;
+      }
+
+      // slight persistence trail
+      ctx.fillStyle = "rgba(4, 3, 14, 0.18)";
+      ctx.fillRect(0, 0, w, h);
+      ctx.globalCompositeOperation = "lighter";
+
+      for (const g of glyphs) {
+        updatePhysics(g);
+        const drift = Math.sin(state.phase + g.phase) * 0.5 + 1.0;
+        const hue = (g.hue + state.phase * 40 + state.entropy * 120) % 360;
+        const alpha = Math.min(1, 0.4 + drift * 0.4);
+        ctx.strokeStyle = `hsla(${hue}, 80%, 75%, ${alpha})`;
+        ctx.lineWidth = g.radius * 0.95;
+        ctx.beginPath();
+        ctx.moveTo(g.prevX, g.prevY);
+        ctx.lineTo(g.x, g.y);
+        ctx.stroke();
+      }
+
+      // draw anchors as faint pulses
+      ctx.fillStyle = "rgba(255, 255, 255, 0.35)";
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
+      for (const a of anchors) {
+        ctx.beginPath();
+        ctx.arc(a.x, a.y, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(a.x, a.y, a.radius, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      if (Math.floor(state.phase * 18) % 6 === 0) {
+        updateReadout();
+      }
+      if (Math.floor(state.phase * 80) % 4 === 0) {
+        state.entropy += 0.0005 * (Math.random() - 0.45);
+        state.entropy = Math.min(0.98, Math.max(0.02, state.entropy));
+        state.coherence = 1 - state.entropy * 0.6 + 0.1 * Math.sin(state.phase * 2);
+        state.coherence = Math.max(0.1, Math.min(0.99, state.coherence));
+      }
+
+      ctx.globalCompositeOperation = "source-over";
+    }
+
+    function pulseEntropy() {
+      state.entropy = Math.min(0.98, state.entropy + 0.12);
+      state.coherence = Math.max(0.12, state.coherence - 0.08);
+      state.phase += 0.6;
+      state.seed = Math.floor(Math.random() * 999999999);
+    }
+
+    function reseedAll() {
+      state.entropy = 0.2;
+      state.coherence = 0.74;
+      state.spiral = rand(0.4, 1.2);
+      state.phase = 0;
+      state.seed = Math.floor(Math.random() * 999999999);
+      seedGlyphs();
+      anchors.splice(0, anchors.length);
+      addAnchor(w * 0.7, h * 0.4, -1);
+      addAnchor(w * 0.3, h * 0.7, 1);
+      updateReadout();
+    }
+
+    function spiralAnchor() {
+      state.spiral = rand(0.2, 2.1);
+      state.moonwind *= -1;
+      state.coherence = Math.min(0.98, state.coherence + 0.07);
+      state.entropy = Math.max(0.05, state.entropy - 0.05);
+      for (let i = 0; i < 8; i++) {
+        const angle = (state.phase + i) * 0.9;
+        addAnchor(w * 0.5 + Math.cos(angle) * Math.min(w, h) * 0.25, h * 0.5 + Math.sin(angle) * Math.min(w, h) * 0.22, i % 2 ? -0.8 : 0.8);
+      }
+    }
+
+    function onPointerMove(e) {
+      pointer.x = e.clientX;
+      pointer.y = e.clientY;
+    }
+
+    function onPointerDown(e) {
+      pointer.x = e.clientX;
+      pointer.y = e.clientY;
+      if (e.shiftKey) {
+        removeNearestAnchor(pointer.x, pointer.y);
+      } else {
+        addAnchor(pointer.x, pointer.y, e.altKey ? -1 : 1);
+      }
+      pointer.down = true;
+    }
+
+    function onPointerUp() {
+      pointer.down = false;
+    }
+
+    function onKeyDown(e) {
+      if (e.code === "Space") {
+        e.preventDefault();
+        state.conductor = !state.conductor;
+        buttons[2].classList.toggle("active", state.conductor);
+        updateReadout();
+      }
+      if (e.code === "KeyP") {
+        pulseEntropy();
+      }
+      if (e.code === "KeyR") {
+        reseedAll();
+      }
+      if (e.code === "KeyM") {
+        state.moonwind *= -1;
+      }
+      if (e.code === "KeyC") {
+        e.preventDefault();
+        state.conductor = !state.conductor;
+        buttons[2].classList.toggle("active", state.conductor);
+        updateReadout();
+      }
+    }
+
+    function bind() {
+      window.addEventListener("resize", resize);
+      canvas.addEventListener("pointermove", onPointerMove);
+      canvas.addEventListener("pointerdown", onPointerDown);
+      window.addEventListener("pointerup", onPointerUp);
+      window.addEventListener("keydown", onKeyDown);
+
+      buttons.forEach(button => {
+        button.addEventListener("click", () => {
+          const action = button.dataset.action;
+          if (action === "seed") reseedAll();
+          if (action === "pulse") pulseEntropy();
+          if (action === "toggle") {
+            state.conductor = !state.conductor;
+            button.classList.toggle("active", state.conductor);
+          }
+          if (action === "spiral") spiralAnchor();
+          updateReadout();
+        });
+      });
+    }
+
+    function init() {
+      resize();
+      seedGlyphs();
+      addAnchor(w * 0.5, h * 0.45, 1);
+      addAnchor(w * 0.45, h * 0.7, -0.75);
+      bind();
+      updateReadout();
+      requestAnimationFrame(render);
+      if (window.PointerEvent) {
+        canvas.setPointerCapture?.(1);
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

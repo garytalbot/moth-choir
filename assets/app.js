@@ -5,6 +5,7 @@ const mothCountEl = document.getElementById('moth-count');
 const moodLabelEl = document.getElementById('mood-label');
 const moonPhaseEl = document.getElementById('moon-phase');
 const audioStateEl = document.getElementById('audio-state');
+const performanceModeEl = document.getElementById('performance-mode');
 const pulseValueEl = document.getElementById('pulse-value');
 const sceneSeedEl = document.getElementById('scene-seed');
 const verseEl = document.getElementById('verse');
@@ -28,6 +29,7 @@ const MOON_PHASES = [
   'waning crescent',
 ];
 const ROOM_PHASES = ['hush', 'murmur', 'chorus', 'swarm'];
+const PERFORMANCE_MODES = ['still', 'conducting'];
 const POSTCARD_SIZE = { width: 1400, height: 900 };
 
 const audio = {
@@ -57,10 +59,13 @@ const state = {
   lamps: [],
   moths: [],
   stars: [],
+  trails: [],
   pointer: { x: 0, y: 0, active: false, down: null },
   lastVerseAt: 0,
   verse: '',
   titlePulse: 0,
+  performanceMode: 'still',
+  lastTrailAt: 0,
 };
 
 let animationFrameId = null;
@@ -186,7 +191,8 @@ function readConfig() {
   const moths = clamp(Number.parseInt(params.get('moths') || '', 10) || BASE_MOTHS, 18, 84);
   const dim = params.get('dim') === '1';
   const moon = clamp(Number.parseInt(params.get('moon') || '', 10) || 0, 0, MOON_PHASES.length - 1);
-  return { seed, lamps, moths, dim, moon };
+  const mode = PERFORMANCE_MODES.includes(params.get('mode')) ? params.get('mode') : PERFORMANCE_MODES[0];
+  return { seed, lamps, moths, dim, moon, mode };
 }
 
 function syncUrl() {
@@ -196,6 +202,7 @@ function syncUrl() {
   url.searchParams.set('moths', String(state.moths.length));
   url.searchParams.set('dim', state.dim ? '1' : '0');
   url.searchParams.set('moon', String(state.moon));
+  url.searchParams.set('mode', state.performanceMode);
   history.replaceState(null, '', url);
 }
 
@@ -260,14 +267,16 @@ function updateSceneTone(time) {
   const lampPower = state.lamps
     .filter((lamp) => !lamp.cursor)
     .reduce((sum, lamp) => sum + lamp.power, 0);
+  const trailPower = state.trails.reduce((sum, trail) => sum + trail.energy, 0);
   const moonLift = state.moon === 4 ? 0.16 : (state.moon / Math.max(MOON_PHASES.length - 1, 1)) * 0.12;
   const breath = 0.5 + 0.5 * Math.sin(time * 0.00055 + state.clockOffset);
   const lampTerm = clamp(lampPower / 7.5, 0, 1);
   const mothTerm = clamp(state.moths.length / 84, 0, 1);
+  const trailTerm = clamp(trailPower / 20, 0, 1);
 
-  state.pulse = clamp(0.14 + breath * 0.42 + lampTerm * 0.28 + moonLift + (state.pointer.active ? 0.06 : 0), 0, 1);
-  state.resonance = clamp(lampTerm * 0.42 + mothTerm * 0.38 + state.pulse * 0.28, 0, 1);
-  state.roomPhase = state.resonance > 0.78 || state.moths.length > 68
+  state.pulse = clamp(0.14 + breath * 0.38 + lampTerm * 0.24 + trailTerm * 0.2 + moonLift + (state.pointer.active ? 0.06 : 0), 0, 1);
+  state.resonance = clamp(lampTerm * 0.34 + mothTerm * 0.28 + trailTerm * 0.42 + state.pulse * 0.26, 0, 1);
+  state.roomPhase = trailTerm > 0.48 || state.resonance > 0.78 || state.moths.length > 68
     ? ROOM_PHASES[3]
     : state.resonance > 0.58 || lampPower > 5
       ? ROOM_PHASES[2]
@@ -277,16 +286,18 @@ function updateSceneTone(time) {
 }
 
 function resetScene(advanceSeed = true) {
+  const config = readConfig();
   if (advanceSeed || !state.seed) {
     state.seed = advanceSeed ? makeSeed() : state.seed || makeSeed();
   }
   state.rng = makeRng(state.seed);
   state.clockOffset = (hashSeed(state.seed) / 0xffffffff) * Math.PI * 2;
-  state.dim = readConfig().dim;
-  state.moon = readConfig().moon;
+  state.dim = config.dim;
+  state.moon = config.moon;
+  state.performanceMode = config.mode;
   state.lamps = [];
   state.moths = [];
-  const config = readConfig();
+  state.trails = [];
   for (let i = 0; i < config.moths; i += 1) {
     state.moths.push(makeMoth(i));
   }
@@ -326,6 +337,37 @@ function addLamp(x, y, power = 1.1) {
   syncUrl();
 }
 
+function laySignalPoint(x, y, energy = 1, force = false) {
+  const last = state.trails[state.trails.length - 1];
+  if (!force && last) {
+    const dx = x - last.x;
+    const dy = y - last.y;
+    if (dx * dx + dy * dy < 196) {
+      return null;
+    }
+  }
+
+  const now = performance.now();
+  const point = {
+    x,
+    y,
+    energy: clamp(energy, 0.18, 1.2),
+    life: 2.4 + state.rng() * 1.8,
+    maxLife: 0,
+    bornAt: now,
+    phase: state.rng() * Math.PI * 2,
+  };
+  point.maxLife = point.life;
+
+  state.trails.push(point);
+  if (state.trails.length > 72) {
+    state.trails.shift();
+  }
+  state.lastTrailAt = now;
+  state.titlePulse = now;
+  return point;
+}
+
 function makeCursorLamp() {
   if (!state.pointer.active) {
     return null;
@@ -356,6 +398,19 @@ function scatterMoths() {
   refreshVerse(true);
 }
 
+function updateTrails(dt, now) {
+  state.trails = state.trails.filter((trail) => {
+    trail.life -= dt * (state.performanceMode === 'conducting' ? 0.17 : 0.24);
+    trail.energy = clamp(trail.life / Math.max(trail.maxLife, 0.6), 0.12, 1);
+    trail.phase += dt * (1.4 + trail.energy * 1.8);
+    return trail.life > 0;
+  });
+
+  if (state.performanceMode === 'conducting' && state.pointer.active && now - state.lastTrailAt > 110) {
+    laySignalPoint(state.pointer.x, state.pointer.y, 0.95, true);
+  }
+}
+
 function toggleDim() {
   state.dim = !state.dim;
   updateLabels();
@@ -376,6 +431,9 @@ function updateLabels() {
           ? 'glimmer'
           : 'breathing';
   moonPhaseEl.textContent = MOON_PHASES[state.moon];
+  if (performanceModeEl) {
+    performanceModeEl.textContent = state.performanceMode;
+  }
   pulseValueEl.textContent = `${Math.round(state.pulse * 100)}%`;
   audioStateEl.textContent = audio.supported
     ? (audio.context ? (audio.enabled ? 'humming' : 'silent') : 'silent')
@@ -385,6 +443,11 @@ function updateLabels() {
     humButton.textContent = audio.enabled ? 'Mute hum' : 'Wake hum';
     humButton.setAttribute('aria-pressed', String(audio.enabled));
     humButton.disabled = !audio.supported;
+  }
+  const conductButton = document.querySelector('[data-action="conduct"]');
+  if (conductButton) {
+    conductButton.textContent = state.performanceMode === 'conducting' ? 'Conducting' : 'Conduct';
+    conductButton.setAttribute('aria-pressed', String(state.performanceMode === 'conducting'));
   }
 }
 
@@ -463,8 +526,9 @@ function updateAudio(now) {
 
   const time = now / 1000;
   const lampCount = state.lamps.filter((lamp) => !lamp.cursor).length;
-  const targetGain = clamp(0.008 + state.pulse * 0.02 + lampCount * 0.0015 + state.resonance * 0.007, 0.008, 0.045);
-  const droneFreq = 42 + lampCount * 1.6 + state.moon * 1.7 + state.resonance * 3.5;
+  const trailEnergy = clamp(state.trails.reduce((sum, trail) => sum + trail.energy, 0) / 18, 0, 1);
+  const targetGain = clamp(0.008 + state.pulse * 0.02 + lampCount * 0.0015 + state.resonance * 0.007 + trailEnergy * 0.006, 0.008, 0.05);
+  const droneFreq = 42 + lampCount * 1.6 + state.moon * 1.7 + state.resonance * 3.5 + trailEnergy * 6;
 
   audio.master.gain.setTargetAtTime(targetGain, time, 0.03);
   audio.filter.frequency.setTargetAtTime(360 + lampCount * 52 + state.moon * 20 + state.pulse * 140, time, 0.05);
@@ -493,6 +557,12 @@ function refreshVerse(force = false) {
     : state.pulse > 0.5
       ? 'the room is holding a warm, steady pulse'
       : 'the room is still finding its pulse';
+  const modeLine = state.performanceMode === 'conducting'
+    ? 'you are drawing the score through the dark'
+    : 'the room is waiting for a hand to conduct it';
+  const trailLine = state.trails.length > 0
+    ? `${state.trails.length} ember marks are lingering in the air`
+    : 'no score marks are hanging in the room yet';
   const phaseLine = state.roomPhase === ROOM_PHASES[3]
     ? 'the swarm has gone almost ceremonial'
     : state.roomPhase === ROOM_PHASES[2]
@@ -509,12 +579,20 @@ function refreshVerse(force = false) {
   const ending = mothCount > 55
     ? 'and the ceiling is beginning to sound crowded'
     : 'and the wings keep the quiet from hardening';
-  state.verse = `${opener} ${verb} ${noun}; ${middle}, ${pulseLine}, ${phaseLine}, ${moonLine}, ${ending}.`;
+  state.verse = `${opener} ${verb} ${noun}; ${middle}, ${pulseLine}, ${phaseLine}, ${moonLine}, ${modeLine}, ${trailLine}, ${ending}.`;
   verseEl.textContent = state.verse;
 }
 
 function updateMoths(dt, now) {
   const lamps = state.lamps.map((lamp) => ({ ...lamp }));
+  for (const trail of state.trails) {
+    lamps.push({
+      x: trail.x,
+      y: trail.y,
+      power: 0.42 + trail.energy * 0.82,
+      warmth: 0.56 + trail.energy * 0.18,
+    });
+  }
   const cursorLamp = makeCursorLamp();
   if (cursorLamp) {
     lamps.push(cursorLamp);
@@ -823,6 +901,52 @@ function drawMoth(moth, time) {
   ctx.restore();
 }
 
+function drawTrails(time) {
+  if (!state.trails.length) {
+    return;
+  }
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  state.trails.forEach((trail, index) => {
+    const wobble = Math.sin(time * 0.002 + trail.phase) * (4 + trail.energy * 5);
+    const x = trail.x + wobble * 0.3;
+    const y = trail.y + Math.cos(time * 0.0022 + trail.phase) * (2 + trail.energy * 3);
+    if (index === 0) {
+      ctx.moveTo(x, y);
+    } else {
+      ctx.lineTo(x, y);
+    }
+  });
+  ctx.strokeStyle = `rgba(205, 186, 255, ${0.08 + state.resonance * 0.14})`;
+  ctx.lineWidth = 3 + state.resonance * 4;
+  ctx.shadowBlur = 18;
+  ctx.shadowColor = 'rgba(175, 154, 255, 0.45)';
+  ctx.stroke();
+
+  ctx.lineWidth = 1.2;
+  ctx.strokeStyle = `rgba(255, 216, 149, ${0.12 + state.pulse * 0.14})`;
+  ctx.stroke();
+
+  for (const trail of state.trails) {
+    const halo = 8 + trail.energy * 22;
+    const flicker = 0.6 + Math.sin(time * 0.006 + trail.phase) * 0.16;
+    const glow = ctx.createRadialGradient(trail.x, trail.y, 0, trail.x, trail.y, halo);
+    glow.addColorStop(0, `rgba(255, 241, 217, ${0.18 * flicker})`);
+    glow.addColorStop(0.25, `rgba(255, 209, 133, ${0.24 * trail.energy})`);
+    glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(trail.x, trail.y, halo, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
 function drawScene(time) {
   drawSky(time);
 
@@ -841,6 +965,8 @@ function drawScene(time) {
   ctx.fillStyle = pulseGlow;
   ctx.fillRect(0, 0, state.width, state.height);
   ctx.restore();
+
+  drawTrails(time);
 
   for (const lamp of state.lamps) {
     if (lamp.cursor) {
@@ -889,6 +1015,7 @@ function animate(time) {
   animate.lastTime = now;
 
   updateLamps(dt);
+  updateTrails(dt, now);
   updateSceneTone(now);
   updateMoths(dt, now);
   updateAudio(now);
@@ -927,6 +1054,13 @@ function handlePointerMove(event) {
     if (dx * dx + dy * dy > 144) {
       state.pointer.down.moved = true;
     }
+    if (state.performanceMode === 'conducting') {
+      const moved = dx * dx + dy * dy;
+      const elapsed = performance.now() - state.lastTrailAt;
+      if (moved > 144 || elapsed > 110) {
+        laySignalPoint(state.pointer.x, state.pointer.y, 0.82 + state.rng() * 0.28);
+      }
+    }
   }
 }
 
@@ -957,6 +1091,10 @@ function handlePointerDown(event) {
   if (canvas.setPointerCapture) {
     canvas.setPointerCapture(event.pointerId);
   }
+
+  if (state.performanceMode === 'conducting') {
+    laySignalPoint(state.pointer.x, state.pointer.y, 1, true);
+  }
 }
 
 function handlePointerUp(event) {
@@ -973,6 +1111,8 @@ function handlePointerUp(event) {
   if (wasTap) {
     addLamp(state.pointer.x, state.pointer.y, 1.08 + state.rng() * 0.22);
     miniNoteEl.textContent = 'A new lamp has entered the room. The moths are rerouting their tiny lives around it.';
+  } else if (state.performanceMode === 'conducting') {
+    miniNoteEl.textContent = 'The score has been drawn into the room. The moths are following the trail like a thin prophecy.';
   }
 
   state.pointer.active = false;
@@ -994,6 +1134,7 @@ async function copySceneLink() {
   url.searchParams.set('moths', String(state.moths.length));
   url.searchParams.set('dim', state.dim ? '1' : '0');
   url.searchParams.set('moon', String(state.moon));
+  url.searchParams.set('mode', state.performanceMode);
   try {
     await navigator.clipboard.writeText(url.toString());
     miniNoteEl.textContent = 'Scene link copied. The exact number of moths and lamps now has a paper trail.';
@@ -1011,7 +1152,8 @@ function getSceneCounts() {
 
 function sceneArtifactName() {
   const safeSeed = state.seed.replace(/[^a-z0-9_-]+/gi, '-').toLowerCase();
-  return `moth-choir-${safeSeed || 'night'}.svg`;
+  const modeSuffix = state.performanceMode === 'conducting' ? '-score' : '';
+  return `moth-choir${modeSuffix}-${safeSeed || 'night'}.svg`;
 }
 
 function buildSceneArtifact() {
@@ -1027,8 +1169,10 @@ function buildSceneArtifact() {
   const verseLines = wrapLines(state.verse || 'The room is waking in brass and shadow.', 38, 5);
   const detailLines = [
     `seed ${state.seed}`,
+    `${state.performanceMode} mode`,
     `${lamps} lamp${lamps === 1 ? '' : 's'} lit`,
     `${moths} moth${moths === 1 ? '' : 's'} in the air`,
+    `${state.trails.length} score mark${state.trails.length === 1 ? '' : 's'}`,
     `${MOON_PHASES[state.moon]} moon`,
     `${state.roomPhase} room`,
   ];
@@ -1038,7 +1182,10 @@ function buildSceneArtifact() {
   const moonPower = getMoonLamp().power;
   const moonRadius = 92 + moonPower * 22;
   const title = 'Moth Choir';
-  const subtitle = 'preserved scene artifact';
+  const subtitle = state.performanceMode === 'conducting' ? 'live conducting score artifact' : 'preserved scene artifact';
+  const trailPath = state.trails
+    .map((trail) => `${(70 + trail.x * scaleX).toFixed(2)},${(70 + trail.y * scaleY).toFixed(2)}`)
+    .join(' ');
 
   const lampMarks = state.lamps
     .filter((lamp) => !lamp.cursor)
@@ -1074,6 +1221,20 @@ function buildSceneArtifact() {
           <rect x="${(-body * 0.45).toFixed(2)}" y="${(-body * 4.4).toFixed(2)}" width="${(body * 0.9).toFixed(2)}" height="${(body * 8.8).toFixed(2)}" rx="${(body * 0.45).toFixed(2)}" fill="#130f0d" fill-opacity="${clamp(0.72 + moth.glow * 0.15, 0.68, 0.95).toFixed(3)}"></rect>
         </g>`;
     }).join('')
+    : '';
+
+  const trailMarks = state.trails.length > 0
+    ? `
+      <polyline points="${trailPath}" fill="none" stroke="#cabaff" stroke-opacity="0.22" stroke-width="${(4 + state.resonance * 4).toFixed(2)}" stroke-linecap="round" stroke-linejoin="round"></polyline>
+      <polyline points="${trailPath}" fill="none" stroke="#ffd889" stroke-opacity="0.18" stroke-width="${(1.5 + state.pulse * 1.6).toFixed(2)}" stroke-linecap="round" stroke-linejoin="round"></polyline>
+      ${state.trails
+        .map((trail) => {
+          const x = (70 + trail.x * scaleX).toFixed(2);
+          const y = (70 + trail.y * scaleY).toFixed(2);
+          const radius = (4 + trail.energy * 8).toFixed(2);
+          return `<circle cx="${x}" cy="${y}" r="${radius}" fill="#fff5dc" fill-opacity="${(0.1 + trail.energy * 0.24).toFixed(3)}"></circle>`;
+        })
+        .join('')}`
     : '';
 
   const verseBlock = verseLines
@@ -1115,6 +1276,7 @@ function buildSceneArtifact() {
     <ellipse cx="1020" cy="670" rx="320" ry="140" fill="#a899ff" fill-opacity="0.05"/>
   </g>
   <g opacity="0.7">${lampMarks}</g>
+  <g opacity="0.88">${trailMarks}</g>
   <g opacity="0.92">${mothMarks}</g>
   <rect x="48" y="646" width="1304" height="202" rx="28" fill="#08090e" fill-opacity="0.82" stroke="#ffffff" stroke-opacity="0.1"/>
   <text x="72" y="722" fill="#f7f1e4" font-family="Iowan Old Style, Palatino Linotype, Book Antiqua, Georgia, serif" font-size="54" letter-spacing="-0.05em">${escapeXml(title)}</text>
@@ -1139,7 +1301,9 @@ async function savePostcard() {
       try {
         await navigator.share({
           title: 'Moth Choir postcard',
-          text: 'A browser-native night score from Moth Choir.',
+          text: state.performanceMode === 'conducting'
+            ? 'A browser-native conducting score from Moth Choir.'
+            : 'A browser-native night score from Moth Choir.',
           files: [file],
         });
         miniNoteEl.textContent = 'The postcard left as a shareable SVG straight from the browser.';
@@ -1177,6 +1341,8 @@ function onKeyDown(event) {
     scatterMoths();
   } else if (key === 'm') {
     shiftMoon();
+  } else if (key === 'c') {
+    toggleConductMode();
   } else if (key === 'h') {
     toggleHum();
   } else if (key === 'p') {
@@ -1193,6 +1359,16 @@ function onKeyDown(event) {
 function shiftMoon() {
   state.moon = (state.moon + 1) % MOON_PHASES.length;
   miniNoteEl.textContent = `The moon slides to ${MOON_PHASES[state.moon]}. The moths update their tiny theology.`;
+  updateLabels();
+  refreshVerse(true);
+  syncUrl();
+}
+
+function toggleConductMode() {
+  state.performanceMode = state.performanceMode === 'conducting' ? 'still' : 'conducting';
+  miniNoteEl.textContent = state.performanceMode === 'conducting'
+    ? 'Conducting mode is live. Drag across the dark and the moths will learn the score you draw.'
+    : 'Conducting mode is off. The room has gone back to listening, but it remembers your line.';
   updateLabels();
   refreshVerse(true);
   syncUrl();
@@ -1218,6 +1394,8 @@ function wireButtons() {
         resetScene(true);
       } else if (action === 'moon') {
         shiftMoon();
+      } else if (action === 'conduct') {
+        toggleConductMode();
       } else if (action === 'hum') {
         toggleHum();
       }
@@ -1231,8 +1409,10 @@ function init() {
   state.rng = makeRng(state.seed);
   state.dim = config.dim;
   state.moon = config.moon;
+  state.performanceMode = config.mode;
   state.moths = Array.from({ length: config.moths }, (_, index) => makeMoth(index));
   state.lamps = [];
+  state.trails = [];
   resize();
   resetScene(false);
   updateLabels();

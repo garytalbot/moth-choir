@@ -1,0 +1,593 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Starlight Canticle</title>
+  <meta name="description" content="A strange generative canticle where clickbeacons pull glimmering particles into unstable orbits and moon-seeded noise whispers through a dark canvas." />
+  <meta name="theme-color" content="#060910" />
+  <meta name="robots" content="index,follow" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Starlight Canticle" />
+  <meta property="og:description" content="Interactive generative canvas toy with click beacons, attractor orbits, and seed-linked behavior." />
+  <meta property="og:url" content="https://garytalbot.github.io/moth-choir/starlight-canticle.html" />
+  <meta property="og:image" content="https://garytalbot.github.io/moth-choir/assets/social-card.svg" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Starlight Canticle" />
+  <meta name="twitter:description" content="Interactive generative canvas toy with click beacons, attractor orbits, and seed-linked behavior." />
+  <meta name="twitter:image" content="https://garytalbot.github.io/moth-choir/assets/social-card.svg" />
+  <style>
+    :root {
+      --bg: #070a13;
+      --ink: #f4f0fc;
+      --muted: rgba(244, 240, 252, 0.75);
+      --panel: rgba(11, 15, 28, 0.82);
+      --line: rgba(255, 255, 255, 0.18);
+      --gold: #ffd88b;
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(circle at 50% 28%, #171b2f 0%, #090c13 45%, #04050b 100%);
+      color: var(--ink);
+      overflow: hidden;
+      font-family: 'Iowan Old Style', Georgia, 'Times New Roman', serif;
+    }
+
+    canvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      filter: saturate(120%);
+    }
+
+    .hud {
+      position: fixed;
+      left: 1rem;
+      top: 1rem;
+      z-index: 10;
+      width: min(45rem, calc(100vw - 2rem));
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--panel);
+      backdrop-filter: blur(16px);
+      padding: 0.9rem 1rem;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.42);
+    }
+
+    .hud h1 {
+      margin: 0;
+      font-size: clamp(1.3rem, 3vw, 2rem);
+      letter-spacing: 0.02em;
+      text-wrap: balance;
+    }
+
+    .hud p {
+      margin: 0.45rem 0 0;
+      max-width: 72ch;
+      color: var(--muted);
+      line-height: 1.35;
+      font-size: 0.93rem;
+    }
+
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.55rem;
+      margin-top: 0.75rem;
+      align-items: center;
+    }
+
+    .pill,
+    .home {
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--ink);
+      border-radius: 999px;
+      padding: 0.45rem 0.85rem;
+      font: inherit;
+      text-decoration: none;
+      cursor: pointer;
+      transition: transform 0.15s ease, border-color 0.15s ease;
+      white-space: nowrap;
+    }
+
+    .pill:hover,
+    .home:hover {
+      transform: translateY(-1px);
+      border-color: rgba(255, 255, 255, 0.34);
+    }
+
+    .pill:focus-visible,
+    .home:focus-visible {
+      outline: 2px solid #ffe3ac;
+      outline-offset: 2px;
+    }
+
+    .pill.active {
+      border-color: rgba(255, 216, 141, 0.9);
+      box-shadow: 0 0 0 1px rgba(255, 216, 141, 0.35) inset;
+      color: #2b1a08;
+      background: linear-gradient(180deg, #ffe4b6, #ce9f44);
+      font-weight: 600;
+    }
+
+    .stats {
+      margin-top: 0.7rem;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0.55rem;
+      font-size: 0.78rem;
+    }
+
+    .stats div {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.04);
+      padding: 0.45rem 0.6rem;
+      display: flex;
+      justify-content: space-between;
+      color: var(--muted);
+    }
+
+    .stats strong {
+      color: #fff;
+      font-size: 0.84rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin-right: 0.4rem;
+    }
+
+    .legend {
+      margin-top: 0.7rem;
+      font-size: 0.75rem;
+      color: rgba(255, 255, 255, 0.72);
+      line-height: 1.4;
+    }
+
+    kbd {
+      padding: 0 0.25rem;
+      border-radius: 0.2rem;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      background: rgba(255, 255, 255, 0.08);
+      font: inherit;
+    }
+
+    @media (max-width: 760px) {
+      .stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="scene" aria-hidden="true"></canvas>
+
+  <div class="hud">
+    <h1>Starlight Canticle</h1>
+    <p>Click the dark to add beacons. Particles orbit their nearest beacon, jitter with seed noise, and drift into a strange lullaby. Each seed becomes a signature.</p>
+
+    <div class="row">
+      <button class="pill" id="pause" type="button">Pause</button>
+      <button class="pill active" id="pauseRebirth" type="button" data-state="running">Orbit drift: running</button>
+      <button class="pill" id="chaosDown" type="button">Reduce chaos</button>
+      <button class="pill" id="chaosUp" type="button">Increase chaos</button>
+      <button class="pill" id="seed" type="button">Re-seed</button>
+      <button class="pill" id="clear" type="button">Clear beacons</button>
+      <button class="pill" id="save" type="button">Export PNG</button>
+      <button class="pill" id="share" type="button">Copy scene link</button>
+    </div>
+
+    <div class="stats" aria-live="polite">
+      <div><strong>Beacons</strong><span id="beacons">0</span></div>
+      <div><strong>Particles</strong><span id="particles">0</span></div>
+      <div><strong>Chaos</strong><span id="chaosLabel">48</span></div>
+      <div><strong>Seed</strong><span id="seedValue">0</span></div>
+    </div>
+
+    <div class="legend">Controls: click to place beacon, <kbd>T</kbd> pause, <kbd>R</kbd> reseed, <kbd>C</kbd> clear, <kbd>Z</kbd> chaos down, <kbd>X</kbd> chaos up, <kbd>S</kbd> save, <kbd>Shift+S</kbd> share link.</div>
+    <a class="home" href="./">← Back to Moth Choir home</a>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('scene');
+    const ctx = canvas.getContext('2d');
+
+    const hud = {
+      beaconsEl: document.getElementById('beacons'),
+      particlesEl: document.getElementById('particles'),
+      chaosEl: document.getElementById('chaosLabel'),
+      seedEl: document.getElementById('seedValue'),
+      pauseBtn: document.getElementById('pause'),
+      orbitBtn: document.getElementById('pauseRebirth'),
+      chaosDownBtn: document.getElementById('chaosDown'),
+      chaosUpBtn: document.getElementById('chaosUp'),
+      reseedBtn: document.getElementById('seed'),
+      clearBtn: document.getElementById('clear'),
+      saveBtn: document.getElementById('save'),
+      shareBtn: document.getElementById('share')
+    };
+
+    let w = 0;
+    let h = 0;
+    let paused = false;
+    let orbitMode = true;
+    let frame = 0;
+    let chaos = 48;
+
+    const query = new URLSearchParams(location.search);
+    let seed = parseInt(query.get('seed') || (Date.now() ^ (Date.now() << 8)), 16) >>> 0;
+
+    const params = {
+      count: 1200,
+      trail: 0.07
+    };
+
+    const beacons = [];
+    const nodes = [];
+
+    const pointer = {x: -1, y: -1};
+
+    function splitmix32(a) {
+      return function() {
+        a |= 0;
+        a = (a + 0x9e3779b9) | 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return (((t ^ (t >>> 14)) >>> 0) / 4294967296);
+      };
+    }
+
+    let rand = splitmix32(seed);
+
+    function reseed(nextSeed) {
+      if (Number.isFinite(nextSeed)) {
+        seed = (nextSeed >>> 0);
+      } else {
+        seed = (Math.floor(Math.random() * 0xFFFFFFFF)) >>> 0;
+      }
+      rand = splitmix32(seed);
+      hud.seedEl.textContent = seed.toString(16).toUpperCase().padStart(8, '0');
+      nodes.length = 0;
+      for (let i = 0; i < params.count; i += 1) {
+        const a = Math.PI * 2 * rand();
+        const r = Math.pow(rand(), 1.5) * Math.max(w, h) * 0.6;
+        const jitter = (rand() - 0.5) * 20;
+        const speed = 0.0018 + rand() * 0.0048;
+        nodes.push({
+          x: w * 0.5 + Math.cos(a) * r,
+          y: h * 0.5 + Math.sin(a) * r,
+          vx: Math.cos(a + Math.PI) * (speed * 50),
+          vy: Math.sin(a + Math.PI) * (speed * 50),
+          hue: Math.floor(rand() * 360),
+          life: Math.floor(200 + rand() * 600),
+          seed: rand(),
+          jitter: jitter,
+          size: 0.4 + rand() * 0.9,
+          orbit: 18 + rand() * 120,
+          mass: 0.25 + rand() * 0.8
+        });
+      }
+    }
+
+    function resize() {
+      const ratio = Math.min(2, window.devicePixelRatio || 1);
+      w = window.innerWidth;
+      h = window.innerHeight;
+      canvas.width = Math.floor(w * ratio);
+      canvas.height = Math.floor(h * ratio);
+      canvas.style.width = `${w}px`;
+      canvas.style.height = `${h}px`;
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      if (!nodes.length) reseed(seed);
+    }
+
+    function addBeacon(x, y) {
+      beacons.push({
+        x,
+        y,
+        pulse: 0,
+        strength: 0.9 + rand() * 1.1,
+        radius: 95 + rand() * 140,
+        mass: 1.2 + rand() * 1.4,
+        spin: (rand() - 0.5) * 0.06
+      });
+      if (beacons.length > 18) beacons.shift();
+      hud.beaconsEl.textContent = beacons.length;
+    }
+
+    function nearestBeacon(px, py) {
+      let nearest = null;
+      let best = Infinity;
+      for (let i = 0; i < beacons.length; i += 1) {
+        const b = beacons[i];
+        const dx = b.x - px;
+        const dy = b.y - py;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < best) {
+          best = d2;
+          nearest = b;
+        }
+      }
+      return nearest;
+    }
+
+    function drawFrame() {
+      if (paused) {
+        requestAnimationFrame(drawFrame);
+        return;
+      }
+
+      frame += 1;
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = `rgba(7, 10, 19, ${params.trail})`;
+      ctx.fillRect(0, 0, w, h);
+      ctx.globalCompositeOperation = 'lighter';
+
+      const t = frame * 0.002;
+      const cx = w * 0.5;
+      const cy = h * 0.5;
+
+      // Ambient halo
+      const halo = 1 + Math.sin(t * 0.7) * 0.08;
+      for (let i = 0; i < 2; i += 1) {
+        const r = Math.min(w, h) * 0.18 * (i + 1) * halo;
+        const alpha = 0.02 / (i + 1);
+        const hue = (t * 40 + i * 20) % 360;
+        ctx.beginPath();
+        ctx.fillStyle = `hsla(${hue}, 90%, 68%, ${alpha})`;
+        ctx.arc(cx + Math.sin(t * 0.42) * 16, cy + Math.cos(t * 0.36) * 8, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      for (let i = nodes.length - 1; i >= 0; i -= 1) {
+        const n = nodes[i];
+        n.life -= 1;
+
+        if (n.life <= 0) {
+          nodes.splice(i, 1);
+          const a = Math.PI * 2 * rand();
+          const r = Math.pow(rand(), 1.5) * Math.max(w, h);
+          nodes.push({
+            x: w * 0.5 + Math.cos(a) * r,
+            y: h * 0.5 + Math.sin(a) * r,
+            vx: (rand() - 0.5) * 0.3,
+            vy: (rand() - 0.5) * 0.3,
+            hue: Math.floor(rand() * 360),
+            life: Math.floor(220 + rand() * 600),
+            seed: rand(),
+            jitter: (rand() - 0.5) * 30,
+            size: 0.35 + rand() * 0.9,
+            orbit: 14 + rand() * 135,
+            mass: 0.2 + rand() * 0.9
+          });
+          continue;
+        }
+
+        const beacon = beacons.length ? nearestBeacon(n.x, n.y) : null;
+        const spin = Math.sin(t * 0.9 + n.seed * 9) * 0.8;
+
+        let ax = 0;
+        let ay = 0;
+
+        if (beacon) {
+          const dx = beacon.x - n.x;
+          const dy = beacon.y - n.y;
+          const d = Math.sqrt(dx * dx + dy * dy) + 0.01;
+          const pull = (beacon.strength * 2200 * Math.pow(1 - Math.min(1, d / beacon.radius), 2)) / (d + 1);
+          ax += (dx / d) * pull;
+          ay += (dy / d) * pull;
+          ax += -dy / d * beacon.spin * 0.3;
+          ay += dx / d * beacon.spin * 0.3;
+        }
+
+        const swirl = Math.sin(n.seed * 60 + t + n.jitter) * 0.12;
+        const breath = Math.cos((t * 0.9) + n.seed * 24);
+        ax += Math.cos(breath * 4 + t * 0.3 + n.seed * 12) * 0.003 * chaos * breath;
+        ay += Math.sin(t * 0.5 + n.seed * 18 + n.jitter * 0.3) * 0.003 * chaos;
+        ax += (pointer.x >= 0 ? (pointer.x - n.x) * 0.00015 * (beacons.length ? 1 : 0.3) : 0);
+        ay += (pointer.y >= 0 ? (pointer.y - n.y) * 0.00015 * (beacons.length ? 1 : 0.3) : 0);
+
+        if (orbitMode && beacon) {
+          const desired = n.orbit + Math.sin(t + n.seed * 20) * 20;
+          const vx = n.vx + (ax * 0.2) + ((dxFrom(n.x, n.y, beacon.x, beacon.y) - desired) * 0.0007);
+          const vy = n.vy + (ay * 0.2) + ((dyFrom(n.x, n.y, beacon.x, beacon.y) - desired) * 0.0007);
+          n.vx = vx * (0.93 - n.mass * 0.04) + (Math.sin(spin) * 0.02);
+          n.vy = vy * (0.93 - n.mass * 0.04) + (Math.cos(spin) * 0.02);
+        } else {
+          n.vx = (n.vx + ax + swirl) * 0.965;
+          n.vy = (n.vy + ay + breath * 0.0015 * chaos) * 0.965;
+        }
+
+        n.vx += Math.sin((n.seed * 10) + t * 3) * 0.002;
+        n.vy += Math.cos((n.seed * 10) - t * 2.7) * 0.002;
+
+        const max = 0.9 + chaos * 0.006;
+        const speed = Math.sqrt(n.vx * n.vx + n.vy * n.vy);
+        if (speed > max) {
+          const scale = max / (speed + 1e-6);
+          n.vx *= scale;
+          n.vy *= scale;
+        }
+
+        n.x += n.vx;
+        n.y += n.vy;
+
+        if (n.x < -40) n.x = w + 40;
+        else if (n.x > w + 40) n.x = -40;
+        if (n.y < -40) n.y = h + 40;
+        else if (n.y > h + 40) n.y = -40;
+
+        const hue = beacon ? (n.hue + t * 14 + beacon.strength * 180) % 360 : (n.hue + t * 14) % 360;
+        const alpha = beacon ? (0.16 + 0.2 * Math.min(1, n.mass)) : 0.1;
+        ctx.beginPath();
+        ctx.fillStyle = `hsla(${hue}, 90%, 72%, ${alpha})`;
+        ctx.arc(n.x, n.y, 0.7 + n.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      if (beacons.length) {
+        for (let i = 0; i < beacons.length; i += 1) {
+          const b = beacons[i];
+          b.pulse = Math.max(0, b.pulse - 0.03);
+          const pulse = b.pulse + 0.08;
+          const radius = b.radius * (1 - pulse * 0.03) * 0.6 + 18;
+          ctx.beginPath();
+          ctx.strokeStyle = `rgba(255,216,141,${0.19 + Math.max(0, 0.2 - pulse * 0.02)})`;
+          ctx.lineWidth = 1;
+          ctx.arc(b.x, b.y, radius + pulse * 16, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+
+      if (frame % 20 === 0) {
+        hud.particlesEl.textContent = nodes.length;
+        hud.chaosEl.textContent = chaos;
+      }
+      requestAnimationFrame(drawFrame);
+    }
+
+    function dxFrom(x1, y1, x2, y2) {
+      const dx = x2 - x1;
+      return dx;
+    }
+
+    function dyFrom(x1, y1, x2, y2) {
+      const dy = y2 - y1;
+      return dy;
+    }
+
+    function addBeaconPulse(x, y) {
+      addBeacon(x, y);
+      if (!beacons.length) return;
+      beacons[beacons.length - 1].pulse = 1;
+    }
+
+    function setOrbitBtn() {
+      hud.orbitBtn.classList.toggle('active', orbitMode);
+      hud.orbitBtn.textContent = `Orbit drift: ${orbitMode ? 'running' : 'floating'}`;
+      hud.orbitBtn.dataset.state = orbitMode ? 'running' : 'floating';
+    }
+
+    hud.pauseBtn.addEventListener('click', () => {
+      paused = !paused;
+      hud.pauseBtn.classList.toggle('active', paused);
+      hud.pauseBtn.textContent = paused ? 'Resume' : 'Pause';
+    });
+
+    hud.orbitBtn.addEventListener('click', () => {
+      orbitMode = !orbitMode;
+      setOrbitBtn();
+    });
+
+    hud.chaosDownBtn.addEventListener('click', () => {
+      chaos = Math.max(0, chaos - 8);
+      hud.chaosEl.textContent = chaos;
+    });
+
+    hud.chaosUpBtn.addEventListener('click', () => {
+      chaos = Math.min(160, chaos + 8);
+      hud.chaosEl.textContent = chaos;
+    });
+
+    hud.reseedBtn.addEventListener('click', () => {
+      reseed(seed + 1);
+      hud.seedEl.textContent = seed.toString(16).toUpperCase().padStart(8, '0');
+      hud.chaosEl.textContent = chaos;
+    });
+
+    hud.clearBtn.addEventListener('click', () => {
+      beacons.length = 0;
+      hud.beaconsEl.textContent = 0;
+      pointer.x = -1;
+      pointer.y = -1;
+    });
+
+    hud.saveBtn.addEventListener('click', () => {
+      const link = document.createElement('a');
+      link.href = canvas.toDataURL('image/png');
+      link.download = `starlight-canticle-${seed}.png`;
+      link.click();
+    });
+
+    hud.shareBtn.addEventListener('click', async () => {
+      const url = `${location.origin}${location.pathname}?seed=${seed}&chaos=${chaos}`;
+      try {
+        await navigator.clipboard?.writeText(url);
+        hud.shareBtn.textContent = 'Link copied ✱';
+        setTimeout(() => (hud.shareBtn.textContent = 'Copy scene link'), 1200);
+      } catch {
+        hud.shareBtn.textContent = 'Copy failed';
+        setTimeout(() => (hud.shareBtn.textContent = 'Copy scene link'), 1200);
+      }
+    });
+
+    canvas.addEventListener('pointermove', (event) => {
+      const rect = canvas.getBoundingClientRect();
+      pointer.x = event.clientX - rect.left;
+      pointer.y = event.clientY - rect.top;
+    });
+
+    canvas.addEventListener('pointerleave', () => {
+      pointer.x = -1;
+      pointer.y = -1;
+    });
+
+    canvas.addEventListener('click', (event) => {
+      const rect = canvas.getBoundingClientRect();
+      addBeaconPulse(event.clientX - rect.left, event.clientY - rect.top);
+    });
+
+    window.addEventListener('keydown', (event) => {
+      if (event.code === 'Space') {
+        event.preventDefault();
+        hud.pauseBtn.click();
+      } else if (event.key.toLowerCase() === 'r') {
+        hud.reseedBtn.click();
+      } else if (event.key.toLowerCase() === 'c') {
+        hud.clearBtn.click();
+      } else if (event.key.toLowerCase() === 'z') {
+        hud.chaosDownBtn.click();
+      } else if (event.key.toLowerCase() === 'x') {
+        hud.chaosUpBtn.click();
+      } else if (event.key.toLowerCase() === 's' && !event.shiftKey) {
+        hud.saveBtn.click();
+      } else if (event.key.toLowerCase() === 's' && event.shiftKey) {
+        hud.shareBtn.click();
+      } else if (event.key.toLowerCase() === 't') {
+        hud.pauseBtn.click();
+      }
+    });
+
+    function applyUrlSettings() {
+      const chaosParam = parseInt(query.get('chaos') || chaos, 10);
+      if (Number.isFinite(chaosParam)) chaos = Math.max(0, Math.min(160, chaosParam));
+      const fromSeed = query.get('seed');
+      if (fromSeed) {
+        const parsed = parseInt(fromSeed, 16);
+        if (Number.isFinite(parsed)) seed = parsed >>> 0;
+      }
+      hud.chaosEl.textContent = chaos;
+      hud.seedEl.textContent = seed.toString(16).toUpperCase().padStart(8, '0');
+      hud.beaconsEl.textContent = 0;
+      hud.particlesEl.textContent = params.count;
+    }
+
+    function init() {
+      applyUrlSettings();
+      resize();
+      reseed(seed);
+      setOrbitBtn();
+      window.addEventListener('resize', resize);
+      requestAnimationFrame(drawFrame);
+    }
+
+    init();
+  </script>
+</body>
+</html>

@@ -1,0 +1,633 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Moth Choir — Sky Oracle</title>
+  <meta name="description" content="Click to throw luminous beacons into a dark field and watch moth-like glyphs braid themselves into impossible constellations.">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Moth Choir — Sky Oracle">
+  <meta property="og:description" content="A strange little interactive where moths trace the hidden weather of your pointer.">
+  <meta property="og:url" content="https://garytalbot.github.io/moth-choir/moth-sky-oracle.html">
+  <meta property="og:image" content="https://garytalbot.github.io/moth-choir/assets/social-card.svg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Moth Choir — Sky Oracle">
+  <meta name="twitter:description" content="A strange little interactive where moths trace the hidden weather of your pointer.">
+  <meta name="twitter:image" content="https://garytalbot.github.io/moth-choir/assets/social-card.svg">
+  <link rel="stylesheet" href="assets/styles.css">
+  <style>
+    .sky-panel {
+      position: absolute;
+      left: max(1rem, env(safe-area-inset-left));
+      top: max(1rem, env(safe-area-inset-top));
+      width: min(40rem, calc(100vw - 2rem));
+      padding: clamp(1rem, 2.8vw, 1.45rem);
+    }
+
+    .sky-panel .panel {
+      margin-bottom: 0.8rem;
+    }
+
+    .statline {
+      margin: 0.8rem 0 0;
+      color: var(--muted);
+      font-size: 0.94rem;
+      line-height: 1.45;
+      display: grid;
+      gap: 0.4rem;
+    }
+
+    .sky-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+      margin-top: 0.8rem;
+    }
+
+    .sky-controls .button {
+      padding: 0.68rem 0.96rem;
+    }
+
+    .status {
+      margin-top: 0.7rem;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0.45rem;
+    }
+
+    .status span {
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 9px;
+      padding: 0.5rem;
+      font-size: 0.82rem;
+      color: var(--muted);
+      line-height: 1.2;
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .status strong {
+      display: block;
+      color: var(--ink);
+      font-size: 0.98rem;
+      margin-bottom: 0.2rem;
+    }
+
+    #sky {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      z-index: 1;
+    }
+
+    .sibling-orb {
+      position: absolute;
+      left: max(1rem, env(safe-area-inset-left));
+      bottom: max(1rem, env(safe-area-inset-bottom));
+      width: min(28rem, calc(100vw - 2rem));
+      z-index: 2;
+    }
+
+    .sibling-orb .source-link {
+      display: inline-flex;
+      flex-direction: column;
+      gap: 0.18rem;
+      width: fit-content;
+      max-width: 100%;
+      padding: 0.72rem 0.95rem;
+      min-height: unset;
+      border-radius: 12px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+    }
+
+    .sibling-orb .source-link strong {
+      font-size: 1rem;
+    }
+
+    .sibling-orb .source-link span {
+      color: var(--muted);
+      max-width: 34ch;
+    }
+
+    @media (max-width: 680px) {
+      .status {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="sky" aria-hidden="true"></canvas>
+
+  <div class="sky-panel">
+    <header class="panel">
+      <div class="kicker">Nocturne field</div>
+      <h1>Moth Choir: Sky Oracle</h1>
+      <p class="lead">Drop beacons into night and watch swarming glyphs remember paths they never had to walk.</p>
+      <p class="sub">This ritual has no fixed answer. A few taps and you get a weather map written in moths, arcs, and noise.</p>
+
+      <div class="sky-controls" role="group" aria-label="Sky controls">
+        <button class="button primary" data-action="beacon">Drop beacon</button>
+        <button class="button" data-action="burst">Beacon burst</button>
+        <button class="button" data-action="mood">Shift mood</button>
+        <button class="button" data-action="pause">Pause / run</button>
+        <button class="button" data-action="trail">Trail reset</button>
+        <button class="button" data-action="shuffle">Reseed sky</button>
+        <button class="button" data-action="save">Save frame</button>
+      </div>
+
+      <div class="status" aria-live="polite">
+        <span><strong id="beacon-count">0</strong>beacons</span>
+        <span><strong id="moth-count">0</strong>moths</span>
+        <span><strong id="mood">drift</strong>mood</span>
+        <span><strong id="fps">0</strong>fps</span>
+      </div>
+
+      <p class="statline">Keys: <kbd>B</kbd> add beacon, <kbd>Space</kbd> pause/run, <kbd>M</kbd> shift mood, <kbd>R</kbd> reseed, <kbd>T</kbd> trail reset, <kbd>S</kbd> save.</p>
+    </header>
+  </div>
+
+  <div class="panel sibling-orb">
+    <a class="source-link" href="index.html">
+      <strong>Return to Moth Choir main room</strong>
+      <span>Slip back into the original swarm chamber.</span>
+    </a>
+  </div>
+
+  <script>
+    (() => {
+      const canvas = document.getElementById('sky');
+      const ctx = canvas.getContext('2d', { alpha: false });
+
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const TWO_PI = Math.PI * 2;
+
+      let width = 0;
+      let height = 0;
+      let last = performance.now();
+      let running = true;
+      let runningMode = 'drift';
+      let baseSeed = Math.floor(Math.random() * 1e9);
+      let frame = 0;
+      let fps = 0;
+
+      const moodBank = [
+        {
+          id: 'drift',
+          noiseAmp: 0.55,
+          noiseScale: 0.0015,
+          attractStrength: 0.025,
+          wander: 0.3,
+          trail: 0.84,
+          glow: 'rgba(193, 166, 255, 0.36)',
+        },
+        {
+          id: 'thrum',
+          noiseAmp: 0.95,
+          noiseScale: 0.0022,
+          attractStrength: 0.042,
+          wander: 0.5,
+          trail: 0.77,
+          glow: 'rgba(255, 208, 140, 0.35)',
+        },
+        {
+          id: 'ashen',
+          noiseAmp: 0.3,
+          noiseScale: 0.0011,
+          attractStrength: 0.036,
+          wander: 0.9,
+          trail: 0.9,
+          glow: 'rgba(255, 255, 255, 0.22)',
+        },
+        {
+          id: 'ritual',
+          noiseAmp: 1.05,
+          noiseScale: 0.0027,
+          attractStrength: 0.053,
+          wander: 0.72,
+          trail: 0.7,
+          glow: 'rgba(255, 130, 110, 0.31)',
+        },
+      ];
+
+      const palette = [
+        ['#d8beff', '#8d6ecf', '#3c2f5a'],
+        ['#ffd7a3', '#f2a05f', '#7a4b13'],
+        ['#f5f0e0', '#a9a7d6', '#3a3f5e'],
+        ['#e6d6ff', '#9d7ad3', '#3f2a57'],
+      ];
+
+      let paletteSet = 0;
+      let moths = [];
+      let beacons = [];
+
+      class RNG {
+        constructor(seed) {
+          this.seed = seed >>> 0;
+        }
+        next() {
+          this.seed = (1664525 * this.seed + 1013904223) >>> 0;
+          return this.seed / 0x1_0000_0000;
+        }
+        range(a, b) {
+          return a + (b - a) * this.next();
+        }
+      }
+
+      function seedRng(seed) {
+        return new RNG(seed);
+      }
+
+      class Beacon {
+        constructor(x, y) {
+          this.x = x;
+          this.y = y;
+          this.phase = Math.random() * TWO_PI;
+          this.pulse = Math.random() * TWO_PI;
+          this.age = 0;
+          this.radius = 28 + Math.random() * 18;
+        }
+        update(dt) {
+          this.age += dt;
+          this.phase += dt * 0.0008;
+          this.pulse += dt * 0.0015;
+        }
+        draw() {
+          const pulse = 1 + Math.sin(this.pulse) * 0.25;
+          const r = this.radius * pulse;
+          const glow = mood().glow;
+          const g = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, r * 1.7);
+          g.addColorStop(0, glow);
+          g.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, r * 1.7, 0, TWO_PI);
+          ctx.fill();
+
+          ctx.strokeStyle = palette[paletteSet][0];
+          ctx.globalAlpha = 0.55;
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, r * 0.8, 0, TWO_PI);
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
+      }
+
+      function hexToRgba(hex, alpha = 1) {
+        const normalized = hex.replace('#', '');
+        const expanded = normalized.length === 3
+          ? normalized.split('').map((ch) => ch + ch).join('')
+          : normalized;
+        const int = Number.parseInt(expanded, 16);
+        const r = (int >> 16) & 255;
+        const g = (int >> 8) & 255;
+        const b = int & 255;
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+      }
+
+      class Moth {
+        constructor(x, y, seedVal) {
+          const r = seedRng(seedVal + Math.floor(Math.random() * 9999));
+          this.x = x;
+          this.y = y;
+          this.vx = r.range(-0.35, 0.35);
+          this.vy = r.range(-0.35, 0.35);
+          this.age = 0;
+          this.mass = r.range(0.4, 1);
+          this.hueSet = Math.floor(r.range(0, 1000)) % 3;
+          this.life = 0;
+          this.path = [];
+          this.maxPath = 48;
+          this.orbit = r.range(0.6, 2.4);
+          this.pulse = r.range(0, TWO_PI);
+        }
+
+        update(dt) {
+          this.age += dt;
+          this.life += dt * 0.001;
+          this.pulse += dt * 0.0018;
+
+          if (beacons.length) {
+            const nearest = nearestBeacons(this.x, this.y, 3);
+            for (const beacon of nearest) {
+              const dx = beacon.x - this.x;
+              const dy = beacon.y - this.y;
+              const d2 = dx * dx + dy * dy;
+              const d = Math.sqrt(d2) + 0.01;
+              const w = mood().attractStrength * (1 - Math.min(1, d / 380));
+              this.vx += (dx / d) * w;
+              this.vy += (dy / d) * w;
+            }
+          }
+
+          const n = Math.sin((this.x * mood().noiseScale) + this.life * 0.9 + this.age * 0.001) * mood().noiseAmp;
+          const m = Math.cos((this.y * mood().noiseScale) + this.life * 1.7 + this.age * 0.0017) * mood().noiseAmp;
+          this.vx += (n + Math.cos(this.pulse) * 0.003) * this.mass;
+          this.vy += (m + Math.sin(this.pulse) * 0.002) * this.mass;
+
+          const wander = mood().wander;
+          this.vx += (Math.random() - 0.5) * 0.06 * wander;
+          this.vy += (Math.random() - 0.5) * 0.06 * wander;
+
+          const v = Math.hypot(this.vx, this.vy) + 0.0001;
+          const cap = 1.6;
+          if (v > cap) {
+            this.vx = (this.vx / v) * cap;
+            this.vy = (this.vy / v) * cap;
+          }
+          this.x += this.vx * dt * 0.06;
+          this.y += this.vy * dt * 0.06;
+
+          this.path.push([this.x, this.y]);
+          if (this.path.length > this.maxPath) this.path.shift();
+
+          if (this.x < -60) this.x = width + 60;
+          else if (this.x > width + 60) this.x = -60;
+          if (this.y < -60) this.y = height + 60;
+          else if (this.y > height + 60) this.y = -60;
+
+          if (this.life > 20 && Math.random() < 0.0015) {
+            this.orbit *= -1;
+            this.life = 0;
+          }
+        }
+
+        draw() {
+          const p = palette[paletteSet][this.hueSet];
+          const alt = palette[paletteSet][(this.hueSet + 1) % 3];
+          const p2 = palette[paletteSet][(this.hueSet + 2) % 3];
+
+          const px = this.x;
+          const py = this.y;
+
+          if (this.path.length > 1) {
+            ctx.strokeStyle = hexToRgba(alt, 0.7 + Math.sin(this.pulse) * 0.2);
+            ctx.lineWidth = 0.7;
+            ctx.beginPath();
+            this.path.forEach((pt, i) => {
+              const [x, y] = pt;
+              if (i === 0) ctx.moveTo(x, y);
+              else ctx.lineTo(x, y);
+            });
+            ctx.stroke();
+          }
+
+          const glow = ctx.createRadialGradient(px, py, 0, px, py, 7);
+          glow.addColorStop(0, hexToRgba(p, 0.95));
+          glow.addColorStop(0.55, hexToRgba(p, 0.1));
+          glow.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx.fillStyle = glow;
+          ctx.beginPath();
+          ctx.arc(px, py, 4.8, 0, TWO_PI);
+          ctx.fill();
+
+          const orbit = this.orbit + Math.sin(this.life * 4) * 0.45;
+          ctx.fillStyle = p2;
+          ctx.beginPath();
+          ctx.arc(px + Math.cos(this.pulse * 2) * orbit, py + Math.sin(this.pulse * 1.8) * orbit, 1.6, 0, TWO_PI);
+          ctx.fill();
+
+          ctx.strokeStyle = p2;
+          ctx.globalAlpha = 0.42;
+          ctx.beginPath();
+          ctx.moveTo(px, py);
+          ctx.lineTo(px + this.vx * 8, py + this.vy * 8);
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
+      }
+
+      function mood() {
+        return moodBank.find((m) => m.id === runningMode) || moodBank[0];
+      }
+
+      function setMood(next) {
+        if (next !== undefined && Number.isFinite(next) && moodBank[next]) {
+          runningMode = moodBank[next].id;
+          paletteSet = next % palette.length;
+          return;
+        }
+
+        const i = (moodBank.findIndex((m) => m.id === runningMode) + 1) % moodBank.length;
+        runningMode = moodBank[i].id;
+        paletteSet = (paletteSet + 1) % palette.length;
+      }
+
+      function updateStatus() {
+        document.getElementById('beacon-count').textContent = beacons.length.toString();
+        document.getElementById('moth-count').textContent = moths.length.toString();
+        document.getElementById('mood').textContent = runningMode;
+        document.getElementById('fps').textContent = fps.toFixed(0);
+      }
+
+      function resize() {
+        width = Math.max(1, Math.floor(window.innerWidth * dpr));
+        height = Math.max(1, Math.floor(window.innerHeight * dpr));
+        canvas.width = width;
+        canvas.height = height;
+        canvas.style.width = `${window.innerWidth}px`;
+        canvas.style.height = `${window.innerHeight}px`;
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.scale(dpr, dpr);
+        width = window.innerWidth;
+        height = window.innerHeight;
+      }
+
+      function initSky(seed) {
+        const rng = seedRng(seed);
+        beacons = [];
+        moths = [];
+
+        const bCount = 4 + Math.floor(rng.next() * 3);
+        for (let i = 0; i < bCount; i++) {
+          addBeacon(rng.range(80, width - 80), rng.range(80, height - 80));
+        }
+
+        const mCount = Math.floor(rng.range(400, 620));
+        for (let i = 0; i < mCount; i++) {
+          moths.push(new Moth(rng.range(0, width), rng.range(0, height), Math.floor(rng.next() * 1e9)));
+        }
+      }
+
+      function nearestBeacons(x, y, k = 2) {
+        if (!beacons.length) return [];
+        return beacons
+          .map((b) => {
+            const d = (b.x - x) ** 2 + (b.y - y) ** 2;
+            return { b, d };
+          })
+          .sort((a, b) => a.d - b.d)
+          .slice(0, k)
+          .map((entry) => entry.b);
+      }
+
+      function addBeacon(x, y) {
+        beacons.push(new Beacon(x, y));
+      }
+
+      function drawBackground() {
+        const m = mood();
+        ctx.fillStyle = 'rgba(2, 3, 8, ' + (1 - m.trail) + ')';
+        ctx.fillRect(0, 0, width, height);
+
+        const bg = ctx.createLinearGradient(0, 0, 0, height);
+        bg.addColorStop(0, 'rgba(16, 17, 31, 0.08)');
+        bg.addColorStop(1, 'rgba(4, 5, 9, 0.16)');
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, width, height);
+
+        const stars = 24;
+        for (let i = 0; i < stars; i++) {
+          const x = (i * 7913) % width;
+          const y = (i * 3137) % height;
+          const twinkle = Math.sin((frame * 0.004) + i) * 0.4 + 0.6;
+          ctx.fillStyle = `rgba(240, 233, 214, ${0.09 * twinkle})`;
+          ctx.fillRect(x, y, 1.1, 1.1);
+        }
+      }
+
+      function draw() {
+        if (!running) {
+          requestAnimationFrame(draw);
+          return;
+        }
+
+        const now = performance.now();
+        const dt = Math.min(32, now - last);
+        last = now;
+        fps = 1000 / dt;
+
+        drawBackground();
+
+        beacons.forEach((b) => {
+          b.update(dt);
+          b.draw();
+        });
+
+        moths.forEach((moth) => {
+          moth.update(dt);
+          moth.draw();
+        });
+
+        if (frame % 3 === 0) {
+          updateStatus();
+        }
+        frame += 1;
+
+        requestAnimationFrame(draw);
+      }
+
+      function click(event) {
+        if (event.target.closest('button')) return;
+        const x = event.clientX;
+        const y = event.clientY;
+        if (event.shiftKey) {
+          burst(x, y);
+        } else {
+          addBeacon(x, y);
+        }
+        updateStatus();
+      }
+
+      function burst(x, y) {
+        const count = 8 + Math.floor(Math.random() * 10);
+        for (let i = 0; i < count; i++) {
+          const angle = (Math.PI * 2 * i) / count;
+          const radius = 80 + Math.random() * 120;
+          addBeacon(
+            Math.min(width - 30, Math.max(30, x + Math.cos(angle) * radius)),
+            Math.min(height - 30, Math.max(30, y + Math.sin(angle) * radius)),
+          );
+        }
+      }
+
+      function screenshot() {
+        const link = document.createElement('a');
+        link.href = canvas.toDataURL('image/png');
+        link.download = `moth-choir-sky-oracle-${Date.now()}.png`;
+        link.click();
+      }
+
+      function reseed(seed = Math.floor(Math.random() * 1e9)) {
+        baseSeed = seed;
+        const query = new URLSearchParams(location.search);
+        query.set('seed', String(seed));
+        history.replaceState({}, '', `${location.pathname}?${query.toString()}`);
+        initSky(seed);
+      }
+
+      function wire() {
+        resize();
+        const query = new URLSearchParams(location.search);
+        const qSeed = Number.parseInt(query.get('seed') || '', 10);
+        baseSeed = Number.isFinite(qSeed) ? qSeed : Math.floor(Math.random() * 1e9);
+
+        initSky(baseSeed);
+
+        const initialMode = query.get('mode');
+        if (initialMode && moodBank.some((m) => m.id === initialMode)) {
+          runningMode = initialMode;
+        }
+
+        document.querySelectorAll('[data-action]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const action = btn.dataset.action;
+            if (action === 'beacon') addBeacon(Math.random() * width * 0.85 + 40, Math.random() * height * 0.85 + 40);
+            else if (action === 'burst') burst(Math.random() * width, Math.random() * height);
+            else if (action === 'mood') setMood();
+            else if (action === 'pause') running = !running;
+            else if (action === 'trail') {
+              ctx.fillStyle = 'rgba(3, 4, 7, 0.85)';
+              ctx.fillRect(0, 0, width, height);
+            } else if (action === 'shuffle') reseed(Math.floor(Math.random() * 1e9));
+            else if (action === 'save') screenshot();
+            updateStatus();
+          });
+        });
+
+        document.addEventListener('pointerup', click);
+        window.addEventListener('resize', resize);
+        document.addEventListener('keydown', (event) => {
+          if (event.target && ['INPUT', 'TEXTAREA'].includes(event.target.tagName)) return;
+          switch (event.key.toLowerCase()) {
+            case 'b':
+              addBeacon(Math.random() * width, Math.random() * height);
+              break;
+            case 'm':
+              setMood();
+              break;
+            case ' ':
+              running = !running;
+              event.preventDefault();
+              break;
+            case 'r':
+              reseed();
+              break;
+            case 't':
+              ctx.fillStyle = 'rgba(3, 4, 7, 0.94)';
+              ctx.fillRect(0, 0, width, height);
+              break;
+            case 's':
+              screenshot();
+              break;
+            default:
+              break;
+          }
+          if (['b', 'm', 'r', 't', 's', ' '].includes(event.key.toLowerCase())) {
+            updateStatus();
+          }
+        });
+
+        resize();
+        last = performance.now();
+        updateStatus();
+        draw();
+      }
+
+      wire();
+    })();
+  </script>
+</body>
+</html>

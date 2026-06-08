@@ -36,6 +36,7 @@ A subtle ambient hum can be started from a user gesture so the scene does not st
 - `starlight-canticle.html`: tap-beacon orbits, chaos and gravity controls, and PNG export for still moments.
 - `nocturne-lattice.html`: click to place beacons and tune density/tide/chaos into a living particle lattice with share-link state.
 - `glass-basilica.html`: click to plant luminous spires and generate drifting cathedral-like particle arches that bend from seeded geometry.
+- `thread-garden.html`: throw nodes into a luminous mesh, then tune density and drift to braid an unstable, living thread garden.
 
 ## Notes
 

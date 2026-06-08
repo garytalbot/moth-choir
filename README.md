@@ -35,6 +35,7 @@ A subtle ambient hum can be started from a user gesture so the scene does not st
 - `ritual-tide.html`: add beacons and tune tide/chaos to bend drifting particles into living currents.
 - `starlight-canticle.html`: tap-beacon orbits, chaos and gravity controls, and PNG export for still moments.
 - `nocturne-lattice.html`: click to place beacons and tune density/tide/chaos into a living particle lattice with share-link state.
+- `glass-basilica.html`: click to plant luminous spires and generate drifting cathedral-like particle arches that bend from seeded geometry.
 
 ## Notes
 

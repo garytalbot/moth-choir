@@ -1,0 +1,746 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Glass Basilica</title>
+  <meta
+    name="description"
+    content="A cathedral of drifting particles where click-seeded spires bend light into strange architecture and drift into the dark."
+  />
+  <meta name="theme-color" content="#05060f" />
+  <meta name="robots" content="index,follow" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Glass Basilica" />
+  <meta
+    property="og:description"
+    content="A cathedral of drifting particles where click-seeded spires bend light into strange architecture and drift into the dark."
+  />
+  <meta property="og:url" content="https://garytalbot.github.io/moth-choir/glass-basilica.html" />
+  <meta property="og:image" content="https://garytalbot.github.io/moth-choir/assets/social-card.svg" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Glass Basilica" />
+  <meta
+    name="twitter:description"
+    content="A cathedral of drifting particles where click-seeded spires bend light into strange architecture and drift into the dark."
+  />
+  <meta name="twitter:image" content="https://garytalbot.github.io/moth-choir/assets/social-card.svg" />
+  <style>
+    :root {
+      --bg: #05060d;
+      --panel: rgba(13, 16, 29, 0.83);
+      --line: rgba(186, 211, 255, 0.22);
+      --ink: #f5f4ff;
+      --muted: #b4c0ff;
+      --a: #98f0ff;
+      --b: #7d6bff;
+      --glow: #89d4ff;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(circle at 15% 15%, rgba(146, 205, 255, 0.12), transparent 36%),
+        radial-gradient(circle at 80% 82%, rgba(151, 102, 255, 0.16), transparent 33%),
+        var(--bg);
+      color: var(--ink);
+      font-family: Inter, "Segoe UI", system-ui, sans-serif;
+    }
+
+    #sky {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    .panel {
+      position: fixed;
+      left: 14px;
+      top: 14px;
+      width: min(460px, calc(100vw - 28px));
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel);
+      backdrop-filter: blur(8px);
+      z-index: 2;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+    }
+
+    h1 {
+      margin: 0 0 6px;
+      font-size: 1.12rem;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+
+    p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.4;
+      font-size: 0.84rem;
+    }
+
+    .row {
+      margin-top: 10px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+    }
+
+    button, .link {
+      appearance: none;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      background: linear-gradient(155deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.02));
+      color: var(--ink);
+      border-radius: 10px;
+      cursor: pointer;
+      padding: 8px 10px;
+      font-size: 0.78rem;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 89px;
+      user-select: none;
+    }
+
+    button:hover,
+    .link:hover { border-color: rgba(255, 255, 255, 0.44); }
+    button:focus-visible,
+    .link:focus-visible {
+      outline: 2px solid rgba(152, 240, 255, 0.7);
+      outline-offset: 2px;
+    }
+
+    .state {
+      margin-top: 8px;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 7px;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+
+    .state span {
+      color: var(--ink);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.88rem;
+    }
+
+    .sliders {
+      margin-top: 10px;
+      display: grid;
+      gap: 6px;
+      font-size: 0.78rem;
+    }
+
+    .slider {
+      display: grid;
+      grid-template-columns: 66px 1fr 46px;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+    }
+
+    .footer {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 0.75rem;
+      line-height: 1.35;
+    }
+
+    .foot-links {
+      margin-top: 6px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    input[type="range"] {
+      width: 100%;
+    }
+
+    @media (max-width: 560px) {
+      .panel {
+        left: 8px;
+        top: 8px;
+        width: calc(100vw - 16px);
+        padding: 10px;
+      }
+      button { min-width: 82px; font-size: 0.74rem; }
+      .state { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="sky" aria-hidden="true"></canvas>
+
+  <aside class="panel" aria-label="Glass Basilica controls">
+    <h1>Glass Basilica</h1>
+    <p>
+      Click the dark to plant luminous spires. They pull particles into a strange geometry of arches,
+      pulses, and accidental architecture. All state can be copied as a share link.
+    </p>
+
+    <div class="row">
+      <button id="seed">Add spire</button>
+      <button id="reseed">Randomize layout</button>
+      <button id="pause" aria-pressed="false">Pause</button>
+      <button id="clear">Clear spires</button>
+      <button id="copy">Copy scene link</button>
+      <button id="save">Save frame</button>
+      <button id="clearTrail">Clear trail</button>
+    </div>
+
+    <div class="row" id="actions"> 
+      <a class="link" href="./">Return</a>
+      <a class="link" href="https://github.com/garytalbot/moth-choir/blob/main/glass-basilica.html" target="_blank" rel="noopener noreferrer">Source</a>
+    </div>
+
+    <div class="state" aria-live="polite">
+      <div>Spires: <span id="spireCount">0</span></div>
+      <div>Particles: <span id="particleCount">0</span></div>
+      <div>Seed: <span id="seedValue">—</span></div>
+      <div>Mode: <span id="modeValue">weave</span></div>
+    </div>
+
+    <div class="sliders" aria-label="Simulation controls">
+      <div class="slider">
+        <label for="drift">Drift</label>
+        <input id="drift" type="range" min="0.35" max="1.85" step="0.02" value="1.03">
+        <span id="driftValue">1.03</span>
+      </div>
+      <div class="slider">
+        <label for="chaos">Chaos</label>
+        <input id="chaos" type="range" min="0.08" max="0.95" step="0.02" value="0.41">
+        <span id="chaosValue">0.41</span>
+      </div>
+    </div>
+
+    <p class="footer">
+      Controls: click = seed, <kbd>S</kbd> spire, <kbd>C</kbd> clear, <kbd>R</kbd> randomize, <kbd>P</kbd> pause,
+      <kbd>W</kbd> clear trail, <kbd>K</kbd> copy link, <kbd>F</kbd> save frame.
+    </p>
+  </aside>
+
+  <script>
+    const canvas = document.getElementById('sky');
+    const ctx = canvas.getContext('2d');
+
+    const el = {
+      spireCount: document.getElementById('spireCount'),
+      particleCount: document.getElementById('particleCount'),
+      seedValue: document.getElementById('seedValue'),
+      modeValue: document.getElementById('modeValue'),
+      drift: document.getElementById('drift'),
+      chaos: document.getElementById('chaos'),
+      driftValue: document.getElementById('driftValue'),
+      chaosValue: document.getElementById('chaosValue'),
+      seedBtn: document.getElementById('seed'),
+      reseedBtn: document.getElementById('reseed'),
+      pauseBtn: document.getElementById('pause'),
+      clearBtn: document.getElementById('clear'),
+      clearTrailBtn: document.getElementById('clearTrail'),
+      copyBtn: document.getElementById('copy'),
+      saveBtn: document.getElementById('save'),
+    };
+
+    const state = {
+      w: 0,
+      h: 0,
+      dpr: 1,
+      paused: false,
+      driftMode: true,
+      pointer: { x: 0, y: 0, active: false },
+      spires: [],
+      particles: [],
+      count: 900,
+      seed: '',
+      drift: Number(el.drift.value),
+      chaos: Number(el.chaos.value),
+      rng: null,
+      frame: 0,
+      lastShare: 0,
+    };
+
+    function hashText(input) {
+      let h = 0x811c9dc5;
+      for (let i = 0; i < input.length; i += 1) {
+        h ^= input.charCodeAt(i);
+        h = Math.imul(h, 0x01000193);
+      }
+      return (h >>> 0).toString(16);
+    }
+
+    function rngFromSeed(seed) {
+      let h = 2166136261;
+      for (let i = 0; i < seed.length; i += 1) {
+        h ^= seed.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+      }
+      let x = h >>> 0;
+      return function() {
+        x += 0x6d2b79f5;
+        let t = Math.imul(x ^ (x >>> 15), x | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+
+    function clamp(value, lo, hi) {
+      return Math.max(lo, Math.min(hi, value));
+    }
+
+    function resize() {
+      state.w = window.innerWidth;
+      state.h = window.innerHeight;
+      state.dpr = Math.min(2, window.devicePixelRatio || 1);
+      canvas.width = Math.floor(state.w * state.dpr);
+      canvas.height = Math.floor(state.h * state.dpr);
+      canvas.style.width = `${state.w}px`;
+      canvas.style.height = `${state.h}px`;
+      ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+    }
+
+    function randomSeed() {
+      const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
+      let s = 'gb-';
+      for (let i = 0; i < 8; i += 1) {
+        s += alphabet[(Math.random() * alphabet.length) | 0];
+      }
+      return s;
+    }
+
+    function resetParticles() {
+      const r = state.rng;
+      state.particles = new Array(state.count).fill(0).map(() => ({
+        x: r() * state.w,
+        y: r() * state.h,
+        vx: (r() - 0.5) * 0.4,
+        vy: (r() - 0.5) * 0.4,
+        mass: 0.35 + r() * 1.4,
+        life: 300 + r() * 400,
+        hue: 188 + r() * 80,
+        history: [[r() * state.w, r() * state.h]],
+        size: 0.5 + r() * 1.8,
+      }));
+    }
+
+    function nearestSpires(px, py) {
+      let best = null;
+      let bestDist = Infinity;
+      for (const s of state.spires) {
+        const dx = px - s.x;
+        const dy = py - s.y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < bestDist) {
+          bestDist = d2;
+          best = { ...s, d2 };
+        }
+      }
+      return best;
+    }
+
+    function addSpires(x, y, fromHash = false) {
+      const w = 55 + state.rng() * 125;
+      state.spires.push({
+        x,
+        y,
+        radius: w,
+        pulse: 0,
+        phase: state.rng() * Math.PI * 2,
+        drift: 0.2 + state.rng() * 0.95,
+        age: 0,
+      });
+      if (state.spires.length > 18) {
+        state.spires.shift();
+      }
+      if (!fromHash) {
+        updateUrl(false);
+      }
+      renderState();
+    }
+
+    function clearSpires() {
+      state.spires = [];
+      updateUrl(false);
+      renderState();
+    }
+
+    function reseed() {
+      state.seed = randomSeed();
+      state.rng = rngFromSeed(state.seed);
+      state.spires = [];
+      const n = 3 + Math.floor(state.rng() * 4);
+      for (let i = 0; i < n; i += 1) {
+        addSpires(
+          state.rng() * state.w,
+          state.rng() * state.h,
+          true,
+        );
+      }
+      resetParticles();
+      updateUrl(false);
+      renderState();
+      state.lastShare = performance.now();
+    }
+
+    function syncInputsFromUrl() {
+      const q = new URLSearchParams(location.search);
+      const fromHash = q.get('seed') || '';
+      if (fromHash) {
+        state.seed = fromHash;
+      } else {
+        state.seed = randomSeed();
+      }
+      state.drift = clamp(Number(q.get('d') || el.drift.value), 0.35, 1.85);
+      state.chaos = clamp(Number(q.get('c') || el.chaos.value), 0.08, 0.95);
+      el.drift.value = state.drift;
+      el.chaos.value = state.chaos;
+      updateRangeLabels();
+
+      state.rng = rngFromSeed(state.seed);
+
+      const encoded = q.get('sp');
+      state.spires = [];
+      if (encoded) {
+        const items = encoded
+          .split('|')
+          .map((token) => token.split(','))
+          .filter((parts) => parts.length === 3)
+          .map(([x, y, r]) => ({
+            x: Number(x) * state.w,
+            y: Number(y) * state.h,
+            radius: Number(r),
+          }))
+          .filter((item) => Number.isFinite(item.x) && Number.isFinite(item.y) && Number.isFinite(item.radius));
+
+        for (const item of items) {
+          state.spires.push({
+            x: clamp(item.x, 0, state.w),
+            y: clamp(item.y, 0, state.h),
+            radius: clamp(item.radius, 40, 220),
+            pulse: 0,
+            phase: state.rng() * Math.PI * 2,
+            drift: 0.2 + state.rng() * 0.95,
+            age: 0,
+          });
+        }
+      }
+      if (!state.spires.length) {
+        for (let i = 0; i < 4; i += 1) {
+          addSpires(state.rng() * state.w, state.rng() * state.h, true);
+        }
+      }
+      resetParticles();
+    }
+
+    function encodeState() {
+      const scaled = state.spires
+        .map((spire) => `${(spire.x / state.w).toFixed(3)},${(spire.y / state.h).toFixed(3)},${spire.radius.toFixed(1)}`)
+        .join('|');
+      const q = new URLSearchParams();
+      q.set('seed', state.seed);
+      q.set('d', state.drift.toFixed(2));
+      q.set('c', state.chaos.toFixed(2));
+      if (scaled.length) {
+        q.set('sp', scaled);
+      }
+      return `?${q.toString()}`;
+    }
+
+    function updateUrl(silent = true) {
+      const next = encodeState();
+      const target = `${location.pathname}${next}`;
+      history.replaceState(null, '', target);
+      if (!silent && performance.now() - state.lastShare > 250) {
+        state.lastShare = performance.now();
+      }
+      renderState();
+    }
+
+    function copyLink() {
+      const url = `${location.origin}${location.pathname}${encodeState()}`;
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(url).then(() => {
+          pulse(el.copyBtn, 'Copied');
+        }).catch(() => {
+          fallbackCopy(url);
+        });
+      } else {
+        fallbackCopy(url);
+      }
+      updateUrl(true);
+    }
+
+    function fallbackCopy(text) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+        pulse(el.copyBtn, 'Copied');
+      } catch {
+        pulse(el.copyBtn, 'Copy failed');
+      }
+      document.body.removeChild(ta);
+    }
+
+    function pulse(button, text) {
+      const original = button.textContent;
+      button.textContent = text;
+      setTimeout(() => {
+        button.textContent = original;
+      }, 700);
+    }
+
+    function saveFrame() {
+      const a = document.createElement('a');
+      const name = `glass-basilica-${state.seed}.png`;
+      a.href = canvas.toDataURL('image/png');
+      a.download = name;
+      a.click();
+      pulse(el.saveBtn, 'Saved');
+    }
+
+    function updateRangeLabels() {
+      state.drift = Number(el.drift.value);
+      state.chaos = Number(el.chaos.value);
+      el.driftValue.textContent = state.drift.toFixed(2);
+      el.chaosValue.textContent = state.chaos.toFixed(2);
+      updateUrl(true);
+    }
+
+    function renderState() {
+      el.spireCount.textContent = String(state.spires.length);
+      el.particleCount.textContent = String(state.particles.length);
+      el.seedValue.textContent = state.seed;
+      el.modeValue.textContent = state.driftMode ? 'weave' : 'quiet';
+      el.pauseBtn.textContent = state.paused ? 'Resume' : 'Pause';
+      el.pauseBtn.setAttribute('aria-pressed', String(state.paused));
+      el.driftValue.textContent = state.drift.toFixed(2);
+      el.chaosValue.textContent = state.chaos.toFixed(2);
+      el.drift.value = state.drift;
+      el.chaos.value = state.chaos;
+    }
+
+    function clearTrail() {
+      ctx.clearRect(0, 0, state.w, state.h);
+      pulse(el.clearTrailBtn, 'Cleared');
+      renderState();
+    }
+
+    function loop() {
+      if (!state.paused) {
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.fillStyle = `rgba(5, 6, 13, ${state.drift * 0.14})`;
+        ctx.fillRect(0, 0, state.w, state.h);
+
+        state.frame += 1;
+
+        // ambient atmosphere
+        const t = state.frame * 0.004;
+        for (let ring = 0; ring < 4; ring += 1) {
+          const radius = Math.min(state.w, state.h) * (0.15 + ring * 0.12);
+          const alpha = 0.07 / (ring + 1);
+          const hue = (220 + ring * 15 + t * 6) % 360;
+          ctx.beginPath();
+          ctx.strokeStyle = `hsla(${hue}, 82%, 62%, ${alpha})`;
+          ctx.lineWidth = 1.2;
+          ctx.arc(state.w * 0.5, state.h * 0.5, radius, t * 0.002 + ring * 0.8, t * 0.008 + Math.PI + ring * 0.8);
+          ctx.stroke();
+        }
+
+        for (const spire of state.spires) {
+          spire.pulse = (spire.pulse + 0.04) % Math.PI;
+          spire.age += 0.02;
+          spire.phase += 0.01;
+          const wobble = 1 + Math.sin(spire.phase + spire.age * 0.5) * 0.13;
+          const radius = spire.radius * wobble;
+          const x = spire.x + Math.sin(spire.age * 0.4 + spire.phase) * 20;
+          const y = spire.y + Math.cos(spire.age * 0.35 + spire.phase) * 20;
+
+          const grad = ctx.createRadialGradient(x, y, radius * 0.1, x, y, radius * 1.15);
+          grad.addColorStop(0, `hsla(${190 + state.chaos * 40}, 90%, 74%, 0.34)`);
+          grad.addColorStop(1, `hsla(${250 - state.drift * 40}, 70%, 48%, 0)`);
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.ellipse(x, y, radius, radius * 0.56, Math.sin(spire.age * 0.2), 0, Math.PI * 2);
+          ctx.fill();
+
+          if (Math.random() < 0.06) {
+            ctx.strokeStyle = `hsla(${190 + state.chaos * 48}, 95%, 80%, 0.35)`;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(x, y, radius * 1.06 + Math.sin(spire.pulse * 4) * 8, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+        }
+
+        for (const p of state.particles) {
+          p.life -= 1;
+          if (p.life < 0) {
+            p.x = state.rng() * state.w;
+            p.y = state.rng() * state.h;
+            p.life = 280 + state.rng() * 500;
+            p.vx = (state.rng() - 0.5) * 0.6;
+            p.vy = (state.rng() - 0.5) * 0.6;
+          }
+
+          const prev = { x: p.x, y: p.y };
+          const target = nearestSpires(p.x, p.y);
+          if (target) {
+            const dx = target.x - p.x;
+            const dy = target.y - p.y;
+            const dist = Math.max(12, Math.sqrt(dx * dx + dy * dy));
+            const inv = 1 / dist;
+            const pull = clamp(1 - dist / Math.max(state.w, state.h), 0.05, 1);
+
+            p.vx += dx * inv * (0.008 * state.drift) * pull;
+            p.vy += dy * inv * (0.008 * state.drift) * pull;
+            p.vx += -dy * inv * 0.0018 * (1.2 - pull);
+            p.vy += dx * inv * 0.0018 * (1.2 - pull);
+          } else {
+            p.vx += (Math.sin(state.frame * 0.002 + p.hue) * 0.002) * state.drift;
+            p.vy += (Math.cos(state.frame * 0.003 + p.hue * 0.8) * 0.002) * state.drift;
+          }
+
+          if (state.pointer.active) {
+            const dx = state.pointer.x - p.x;
+            const dy = state.pointer.y - p.y;
+            const d = Math.sqrt(dx * dx + dy * dy) || 1;
+            const hand = 1 / d;
+            p.vx += dx * hand * 0.0028 * state.chaos;
+            p.vy += dy * hand * 0.0028 * state.chaos;
+          }
+
+          p.vx *= 0.985;
+          p.vy *= 0.985;
+
+          p.x += p.vx;
+          p.y += p.vy;
+
+          if (p.x < 0) p.x += state.w;
+          if (p.y < 0) p.y += state.h;
+          if (p.x > state.w) p.x -= state.w;
+          if (p.y > state.h) p.y -= state.h;
+
+          p.history.push([p.x, p.y]);
+          if (p.history.length > 7) p.history.shift();
+
+          const hue = (p.hue + p.life * 0.04) % 360;
+          const alpha = 0.16 + (Math.sin(p.life * 0.05 + p.x * 0.002) * 0.1);
+          ctx.strokeStyle = `hsla(${hue}, 95%, 78%, ${clamp(alpha, 0.05, 0.28)})`;
+          ctx.lineWidth = 0.5 + p.size * 0.15;
+          ctx.beginPath();
+          if (p.history.length > 1) {
+            const [sx, sy] = p.history[0];
+            ctx.moveTo(sx, sy);
+            for (let i = 1; i < p.history.length; i += 1) {
+              const [x, y] = p.history[i];
+              ctx.lineTo(x, y);
+            }
+          }
+          ctx.stroke();
+
+          ctx.fillStyle = `hsla(${hue}, 95%, 84%, 0.4)`;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size * 0.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        if (state.pointer.active) {
+          const pulse = 1.3 + Math.sin(state.frame * 0.13) * 0.08;
+          ctx.strokeStyle = `rgba(152, 240, 255, ${0.5 + state.chaos * 0.4})`;
+          ctx.lineWidth = 1.3;
+          ctx.beginPath();
+          ctx.arc(state.pointer.x, state.pointer.y, 22 * pulse, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+
+      requestAnimationFrame(loop);
+    }
+
+    function setup() {
+      resize();
+      window.addEventListener('resize', resize);
+      syncInputsFromUrl();
+      renderState();
+
+      canvas.addEventListener('pointermove', (event) => {
+        const rect = canvas.getBoundingClientRect();
+        state.pointer.x = event.clientX - rect.left;
+        state.pointer.y = event.clientY - rect.top;
+      });
+
+      canvas.addEventListener('pointerdown', (event) => {
+        const rect = canvas.getBoundingClientRect();
+        addSpires(event.clientX - rect.left, event.clientY - rect.top);
+        state.pointer.active = true;
+      });
+
+      canvas.addEventListener('pointerup', () => {
+        state.pointer.active = false;
+      });
+      canvas.addEventListener('pointerleave', () => {
+        state.pointer.active = false;
+      });
+
+      el.seedBtn.addEventListener('click', () => addSpires(
+        Math.random() * state.w,
+        Math.random() * state.h,
+      ));
+      el.reseedBtn.addEventListener('click', reseed);
+      el.clearBtn.addEventListener('click', clearSpires);
+      el.clearTrailBtn.addEventListener('click', clearTrail);
+      el.copyBtn.addEventListener('click', copyLink);
+      el.saveBtn.addEventListener('click', saveFrame);
+
+      el.pauseBtn.addEventListener('click', () => {
+        state.paused = !state.paused;
+        renderState();
+      });
+
+      el.drift.addEventListener('input', updateRangeLabels);
+      el.chaos.addEventListener('input', updateRangeLabels);
+
+      window.addEventListener('keydown', (event) => {
+        const key = event.key.toLowerCase();
+        if (['s', 'c', 'r', 'p', 'w', 'k', 'f', ' '].includes(key)) {
+          event.preventDefault();
+        }
+        if (key === 's') {
+          addSpires(Math.random() * state.w, Math.random() * state.h);
+        } else if (key === 'c') {
+          clearSpires();
+        } else if (key === 'r') {
+          reseed();
+        } else if (key === 'p' || key === ' ') {
+          state.paused = !state.paused;
+          renderState();
+        } else if (key === 'w') {
+          clearTrail();
+        } else if (key === 'k') {
+          copyLink();
+        } else if (key === 'f') {
+          saveFrame();
+        }
+      });
+
+      requestAnimationFrame(loop);
+    }
+
+    setup();
+  </script>
+</body>
+</html>
